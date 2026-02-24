@@ -10,3 +10,7 @@ artifacts/corpus/**
 artifacts/crashes/**
 artifacts/reports/**
 !artifacts/**/.gitkeep
+
+# run-based outputs (keep directories via .gitkeep at any depth)
+artifacts/runs/**
+!artifacts/runs/**/.gitkeep
