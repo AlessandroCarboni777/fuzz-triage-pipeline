@@ -16,5 +16,6 @@ artifacts/runs/**
 !artifacts/runs/**/.gitkeep
 
 # triage outputs
+artifacts/reports/**
 artifacts/repros/**
-!artifacts/repros/**/.gitkeep
+!artifacts/**/.gitkeep

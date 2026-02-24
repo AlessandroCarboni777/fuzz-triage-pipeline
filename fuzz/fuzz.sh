@@ -2,10 +2,11 @@
 set -euo pipefail
 
 TARGET="${1:-cjson}"
+MODE="${2:-normal}"   # normal | demo-crash
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Unique run id (UTC-ish, deterministic format)
+# Unique run id
 RUN_ID="$(date +%Y-%m-%d_%H%M%S)"
 
 RUN_DIR="$ROOT/artifacts/runs/$TARGET/$RUN_ID"
@@ -27,6 +28,7 @@ write_meta() {
   cat > "$META_FILE" <<EOF
 {
   "target": "$TARGET",
+  "mode": "$MODE",
   "run_id": "$RUN_ID",
   "timestamp": "$(date -Iseconds)",
   "docker_image": "${DOCKER_IMAGE_TAG:-unknown}",
@@ -61,6 +63,20 @@ if [ "$TARGET" = "cjson" ]; then
 
   FUZZER="$ROOT/targets/cjson/out/cjson_fuzzer"
 
+  # DEMO-CRASH mode: enable env var + drop seed into corpus
+  if [ "$MODE" = "demo-crash" ]; then
+    echo "[+] DEMO CRASH enabled (FUZZPIPE_DEMO_CRASH=1)" | tee -a "$LOG_FILE"
+    export FUZZPIPE_DEMO_CRASH=1
+
+    DEMO_SEED="$ROOT/artifacts/runs/cjson/demo_seed.txt"
+    if [ -f "$DEMO_SEED" ]; then
+      cp "$DEMO_SEED" "$CORPUS_DIR/seed_CRASHME.txt"
+      echo "[+] Added demo seed to corpus: seed_CRASHME.txt" | tee -a "$LOG_FILE"
+    else
+      echo "[-] Demo seed not found at $DEMO_SEED" | tee -a "$LOG_FILE"
+    fi
+  fi
+
   echo "[+] Running libFuzzer" | tee -a "$LOG_FILE"
 
   # Build fuzzer args
@@ -79,6 +95,6 @@ if [ "$TARGET" = "cjson" ]; then
 
 else
   echo "Unknown target: $TARGET"
-  echo "Usage: ./fuzz/fuzz.sh cjson"
+  echo "Usage: ./fuzz/fuzz.sh cjson [normal|demo-crash]"
   exit 1
 fi
