@@ -1,0 +1,12 @@
+# third-party sources (fetched at runtime)
+targets/**/src/**
+
+# build outputs (keep directory via .gitkeep)
+targets/**/out/*
+!targets/**/out/.gitkeep
+
+# fuzz artifacts (keep directories via .gitkeep)
+artifacts/corpus/**
+artifacts/crashes/**
+artifacts/reports/**
+!artifacts/**/.gitkeep
