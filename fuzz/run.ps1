@@ -22,6 +22,21 @@ elseif ($cmd -eq "fuzz") {
       -v ${PWD}:/workspace `
       $image bash -lc "chmod +x fuzz/fuzz.sh targets/cjson/fetch.sh targets/cjson/build.sh && ${envCmd}./fuzz/fuzz.sh $target"
 }
+
+elseif ($cmd -eq "repro") {
+    if (-not $target) { $target = "cjson" }
+    if (-not $args[0]) {
+        Write-Host "Usage: .\fuzz\run.ps1 repro <target> <crash_path>"
+        exit 1
+    }
+    $crashPath = $args[0]
+
+    docker run -it --rm `
+      -e DOCKER_IMAGE_TAG="$image:latest" `
+      -v ${PWD}:/workspace `
+      $image bash -lc "chmod +x triage/repro.sh && ./triage/repro.sh $target /workspace/$crashPath"
+}
+
 else {
     Write-Host "Usage:"
     Write-Host ".\fuzz\run.ps1 build"

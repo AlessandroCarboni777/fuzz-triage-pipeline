@@ -14,3 +14,7 @@ artifacts/reports/**
 # run-based outputs (keep directories via .gitkeep at any depth)
 artifacts/runs/**
 !artifacts/runs/**/.gitkeep
+
+# triage outputs
+artifacts/repros/**
+!artifacts/repros/**/.gitkeep
