@@ -40,7 +40,7 @@ if ($cmd -eq "build") {
     docker build -t $image -f docker/Dockerfile .
 }
 elseif ($cmd -eq "shell") {
-    docker run -it --rm -v ${PWD}:/workspace $image
+    docker run --rm -v ${PWD}:/workspace $image
 }
 elseif ($cmd -eq "fuzz") {
     # seconds=0 means run until Ctrl+C
