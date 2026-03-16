@@ -306,7 +306,7 @@ function Invoke-InContainer {
 }
 
 function Get-BootstrapCommand {
-    return "chmod +x scripts/diagnostics_env.sh fuzz/fuzz.sh triage/repro.sh triage/minimize.sh targets/cjson/fetch.sh targets/cjson/build.sh targets/cjson_old/fetch.sh targets/cjson_old/build.sh"
+    return "chmod +x scripts/diagnostics_env.sh scripts/target_common.sh scripts/target_fetch_common.sh scripts/target_build_common.sh fuzz/fuzz.sh triage/repro.sh triage/minimize.sh && find targets -type f \( -name fetch.sh -o -name build.sh \) -exec chmod +x {} +"
 }
 
 function Get-RelativeCrashWorkspacePath {

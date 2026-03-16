@@ -1,0 +1,23 @@
+{
+  "target": "cjson",
+  "minimize_id": "2026-03-16_081240",
+  "timestamp": "2026-03-16T08:13:03+00:00",
+  "run_id": "2026-03-16_081232",
+  "crash_file": "crash-ad06690d5fb9815b00ade5a8c856c90bd0550640",
+  "crash_path": "/workspace/artifacts/runs/cjson/2026-03-16_081232/crashes/crash-ad06690d5fb9815b00ade5a8c856c90bd0550640",
+  "minimized_path": "/workspace/artifacts/minimized/cjson/2026-03-16_081240/minimized-crash-ad06690d5fb9815b00ade5a8c856c90bd0550640",
+  "fuzzer_path": "/workspace/targets/cjson/out/cjson_fuzzer",
+  "original_size": 8,
+  "minimized_size": 7,
+  "reduction_percent": 12.5,
+  "max_total_time": 20,
+  "exit_code": 0,
+  "minimize_status": "minimized",
+  "diagnostics": {
+    "sanitizers": "address,undefined",
+    "asan_symbolizer_path": "/usr/bin/llvm-symbolizer",
+    "asan_options": "symbolize=1:detect_leaks=0:abort_on_error=1",
+    "ubsan_options": "print_stacktrace=1:halt_on_error=1"
+  },
+  "demo_crash": "1"
+}

@@ -1,0 +1,127 @@
+[+] Minimizing crash...
+[+] Fuzzer: /workspace/targets/cjson/out/cjson_fuzzer
+[+] Input crash: /workspace/artifacts/runs/cjson/2026-03-16_075647/crashes/crash-ad06690d5fb9815b00ade5a8c856c90bd0550640
+[+] Crash file: crash-ad06690d5fb9815b00ade5a8c856c90bd0550640
+[+] Run id: 2026-03-16_075647
+[+] Output file: /workspace/artifacts/minimized/cjson/2026-03-16_075656/minimized-crash-ad06690d5fb9815b00ade5a8c856c90bd0550640
+[+] Original size: 8
+[+] MINIMIZE_MAX_TOTAL_TIME=20
+[+] FUZZPIPE_SANITIZERS=address,undefined
+[+] ASAN_SYMBOLIZER_PATH=/usr/bin/llvm-symbolizer
+[+] UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+[+] ASAN_OPTIONS=symbolize=1:detect_leaks=0:abort_on_error=1
+[+] FUZZPIPE_SYMBOLIZER_PATH=/usr/bin/llvm-symbolizer
+[+] FUZZPIPE_DEMO_CRASH=1
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3053833458
+INFO: Loaded 1 modules   (3253 inline 8-bit counters): 3253 [0x564306333848, 0x5643063344fd),
+INFO: Loaded 1 PC tables (3253 PCs): 3253 [0x564306334500,0x564306341050),
+CRASH_MIN: minimizing crash input: '/workspace/artifacts/runs/cjson/2026-03-16_075647/crashes/crash-ad06690d5fb9815b00ade5a8c856c90bd0550640' (8 bytes)
+CRASH_MIN: executing: /workspace/targets/cjson/out/cjson_fuzzer -max_total_time=20 /workspace/artifacts/runs/cjson/2026-03-16_075647/crashes/crash-ad06690d5fb9815b00ade5a8c856c90bd0550640 2>&1
+CRASH_MIN: '/workspace/artifacts/runs/cjson/2026-03-16_075647/crashes/crash-ad06690d5fb9815b00ade5a8c856c90bd0550640' (8 bytes) caused a crash. Will try to minimize it further
+CRASH_MIN: executing: /workspace/targets/cjson/out/cjson_fuzzer -max_total_time=20 /workspace/artifacts/runs/cjson/2026-03-16_075647/crashes/crash-ad06690d5fb9815b00ade5a8c856c90bd0550640 -minimize_crash_internal_step=1 -exact_artifact_path=/workspace/artifacts/minimized/cjson/2026-03-16_075656/minimized-crash-ad06690d5fb9815b00ade5a8c856c90bd0550640 2>&1
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3849885163
+INFO: Loaded 1 modules   (3253 inline 8-bit counters): 3253 [0x56233b21e848, 0x56233b21f4fd),
+INFO: Loaded 1 PC tables (3253 PCs): 3253 [0x56233b21f500,0x56233b22c050),
+INFO: Starting MinimizeCrashInputInternalStep: 8
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 8 bytes
+=================================================================
+==66==ERROR: AddressSanitizer: heap-use-after-free on address 0x502000000bd0 at pc 0x56233b1afaf7 bp 0x7ffc31f66d40 sp 0x7ffc31f66d38
+WRITE of size 1 at 0x502000000bd0 thread T0
+    #0 0x56233b1afaf6 in trigger_demo_asan_use_after_free() /workspace/targets/cjson/harness.cpp:30:7
+    #1 0x56233b1afaf6 in LLVMFuzzerTestOneInput /workspace/targets/cjson/harness.cpp:192:5
+    #2 0x56233b0bac74 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) (/workspace/targets/cjson/out/cjson_fuzzer+0x6cc74) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #3 0x56233b0bc8ce in fuzzer::Fuzzer::MinimizeCrashLoop(std::vector<unsigned char, std::allocator<unsigned char>> const&) (/workspace/targets/cjson/out/cjson_fuzzer+0x6e8ce) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #4 0x56233b0a5b2e in fuzzer::MinimizeCrashInputInternalStep(fuzzer::Fuzzer*, fuzzer::InputCorpus*) (/workspace/targets/cjson/out/cjson_fuzzer+0x57b2e) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #5 0x56233b0a97ca in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) (/workspace/targets/cjson/out/cjson_fuzzer+0x5b7ca) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #6 0x56233b0d4016 in main (/workspace/targets/cjson/out/cjson_fuzzer+0x86016) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #7 0x7f644d85a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #8 0x7f644d85a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #9 0x56233b09e974 in _start (/workspace/targets/cjson/out/cjson_fuzzer+0x50974) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+
+0x502000000bd0 is located 0 bytes inside of 8-byte region [0x502000000bd0,0x502000000bd8)
+freed by thread T0 here:
+    #0 0x56233b16eb0a in free (/workspace/targets/cjson/out/cjson_fuzzer+0x120b0a) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #1 0x56233b1af91a in trigger_demo_asan_use_after_free() /workspace/targets/cjson/harness.cpp:27:3
+    #2 0x56233b1af91a in LLVMFuzzerTestOneInput /workspace/targets/cjson/harness.cpp:192:5
+    #3 0x56233b0bac74 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) (/workspace/targets/cjson/out/cjson_fuzzer+0x6cc74) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #4 0x56233b0bc8ce in fuzzer::Fuzzer::MinimizeCrashLoop(std::vector<unsigned char, std::allocator<unsigned char>> const&) (/workspace/targets/cjson/out/cjson_fuzzer+0x6e8ce) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #5 0x56233b0a5b2e in fuzzer::MinimizeCrashInputInternalStep(fuzzer::Fuzzer*, fuzzer::InputCorpus*) (/workspace/targets/cjson/out/cjson_fuzzer+0x57b2e) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #6 0x56233b0a97ca in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) (/workspace/targets/cjson/out/cjson_fuzzer+0x5b7ca) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #7 0x56233b0d4016 in main (/workspace/targets/cjson/out/cjson_fuzzer+0x86016) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #8 0x7f644d85a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #9 0x7f644d85a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #10 0x56233b09e974 in _start (/workspace/targets/cjson/out/cjson_fuzzer+0x50974) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+
+previously allocated by thread T0 here:
+    #0 0x56233b16eda3 in malloc (/workspace/targets/cjson/out/cjson_fuzzer+0x120da3) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #1 0x56233b1af8c2 in trigger_demo_asan_use_after_free() /workspace/targets/cjson/harness.cpp:21:32
+    #2 0x56233b1af8c2 in LLVMFuzzerTestOneInput /workspace/targets/cjson/harness.cpp:192:5
+    #3 0x56233b0bac74 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) (/workspace/targets/cjson/out/cjson_fuzzer+0x6cc74) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #4 0x56233b0bc8ce in fuzzer::Fuzzer::MinimizeCrashLoop(std::vector<unsigned char, std::allocator<unsigned char>> const&) (/workspace/targets/cjson/out/cjson_fuzzer+0x6e8ce) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #5 0x56233b0a5b2e in fuzzer::MinimizeCrashInputInternalStep(fuzzer::Fuzzer*, fuzzer::InputCorpus*) (/workspace/targets/cjson/out/cjson_fuzzer+0x57b2e) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #6 0x56233b0a97ca in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) (/workspace/targets/cjson/out/cjson_fuzzer+0x5b7ca) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #7 0x56233b0d4016 in main (/workspace/targets/cjson/out/cjson_fuzzer+0x86016) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+    #8 0x7f644d85a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #9 0x7f644d85a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #10 0x56233b09e974 in _start (/workspace/targets/cjson/out/cjson_fuzzer+0x50974) (BuildId: 91c83e2aa4a0c516277399e73ccc820fc744660a)
+
+SUMMARY: AddressSanitizer: heap-use-after-free /workspace/targets/cjson/harness.cpp:30:7 in trigger_demo_asan_use_after_free()
+Shadow bytes around the buggy address:
+  0x502000000900: fa fa fd fa fa fa fd fa fa fa fd fa fa fa fd fa
+  0x502000000980: fa fa fd fa fa fa fd fa fa fa fd fa fa fa fd fa
+  0x502000000a00: fa fa fd fa fa fa fd fa fa fa fd fa fa fa fd fa
+  0x502000000a80: fa fa fd fa fa fa fd fa fa fa fd fa fa fa fd fa
+  0x502000000b00: fa fa fd fa fa fa fd fa fa fa fd fa fa fa fd fa
+=>0x502000000b80: fa fa 07 fa fa fa 00 fa fa fa[fd]fa fa fa fa fa
+  0x502000000c00: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x502000000c80: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x502000000d00: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x502000000d80: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x502000000e00: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==66==ABORTING
+MS: 5 EraseBytes-EraseBytes-EraseBytes-EraseBytes-EraseBytes- DE: "CRASHME"-"\357\273\277"-"CRASHME"-; base unit: 0000000000000000000000000000000000000000
+0x43,0x52,0x41,0x53,0x48,0x4d,0x45,
+CRASHME
+artifact_prefix='./'; Test unit written to /workspace/artifacts/minimized/cjson/2026-03-16_075656/minimized-crash-ad06690d5fb9815b00ade5a8c856c90bd0550640
+Base64: Q1JBU0hNRQ==
+Aborted (core dumped)
+*********************************
+CRASH_MIN: minimizing crash input: '/workspace/artifacts/minimized/cjson/2026-03-16_075656/minimized-crash-ad06690d5fb9815b00ade5a8c856c90bd0550640' (7 bytes)
+CRASH_MIN: executing: /workspace/targets/cjson/out/cjson_fuzzer -max_total_time=20 /workspace/artifacts/minimized/cjson/2026-03-16_075656/minimized-crash-ad06690d5fb9815b00ade5a8c856c90bd0550640 2>&1
+CRASH_MIN: '/workspace/artifacts/minimized/cjson/2026-03-16_075656/minimized-crash-ad06690d5fb9815b00ade5a8c856c90bd0550640' (7 bytes) caused a crash. Will try to minimize it further
+CRASH_MIN: executing: /workspace/targets/cjson/out/cjson_fuzzer -max_total_time=20 /workspace/artifacts/minimized/cjson/2026-03-16_075656/minimized-crash-ad06690d5fb9815b00ade5a8c856c90bd0550640 -minimize_crash_internal_step=1 -exact_artifact_path=/workspace/artifacts/minimized/cjson/2026-03-16_075656/minimized-crash-ad06690d5fb9815b00ade5a8c856c90bd0550640 2>&1
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1054319532
+INFO: Loaded 1 modules   (3253 inline 8-bit counters): 3253 [0x5650b27a0848, 0x5650b27a14fd),
+INFO: Loaded 1 PC tables (3253 PCs): 3253 [0x5650b27a1500,0x5650b27ae050),
+INFO: Starting MinimizeCrashInputInternalStep: 7
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 7 bytes
+#1048576	pulse  exec/s: 524288 rss: 250Mb
+#2097152	pulse  exec/s: 524288 rss: 463Mb
+#4194304	pulse  exec/s: 466033 rss: 571Mb
+#8388608	pulse  exec/s: 493447 rss: 571Mb
+INFO: Done MinimizeCrashInputInternalStep, no crashes found
+CRASH_MIN: failed to minimize beyond /workspace/artifacts/minimized/cjson/2026-03-16_075656/minimized-crash-ad06690d5fb9815b00ade5a8c856c90bd0550640 (7 bytes), exiting
+[+] Fuzzer exit code: 0
+[+] Minimize status: minimized

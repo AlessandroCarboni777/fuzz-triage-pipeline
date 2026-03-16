@@ -210,6 +210,16 @@ def load_meta(run_dir: Path) -> dict[str, Any]:
     return {}
 
 
+def get_target_fuzzer_path(target: str) -> Path:
+    target_dir = Path("/workspace/targets") / target
+    fuzzer_path = target_dir / "out" / f"{target}_fuzzer"
+
+    if not target_dir.exists():
+        raise SystemExit(f"Unknown target: {target}")
+
+    return fuzzer_path
+
+
 def load_minimized_index(target: str) -> dict[str, MinimizeInfo]:
     minimized_root = Path("/workspace/artifacts/minimized") / target
     index: dict[str, MinimizeInfo] = {}
@@ -853,12 +863,7 @@ def main() -> None:
     else:
         raise SystemExit("Specify --run or --last")
 
-    if target == "cjson":
-        fuzzer_path = Path("/workspace/targets/cjson/out/cjson_fuzzer")
-    elif target == "cjson_old":
-        fuzzer_path = Path("/workspace/targets/cjson_old/out/cjson_old_fuzzer")
-    else:
-        raise SystemExit(f"Unknown target: {target}")
+    fuzzer_path = get_target_fuzzer_path(target)
 
     if not fuzzer_path.exists():
         raise SystemExit(f"Fuzzer binary not found: {fuzzer_path} (did you build?)")
