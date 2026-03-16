@@ -1,6 +1,10 @@
-user:
-  id: 1
-  name: alice
-  roles:
-    - admin
-    - user
+service:
+  metadata:
+    name: api
+    labels:
+      env: dev
+      team: sec
+  spec:
+    ports:
+      - 8080
+      - 8443

@@ -32,31 +32,36 @@ param(
     [Parameter(Position = 1)]
     [string]$target = "cjson",
 
-    # Used by: fuzz / demo-crash (seconds)
     [Parameter(Position = 2)]
     [int]$seconds = 0,
 
-    # Used by: repro / minimize
     [string]$crash = "",
-
-    # Used by: triage (repo-relative run dir)
     [string]$run = "",
-
-    # Used by: triage
     [int]$timeout = 20,
-
-    # Used by: fuzz / demo-crash
     [string]$targetRef = "",
-
-    # Used by: delete
     [string]$Id = "",
 
-    # Generic selectors
     [switch]$Last,
     [switch]$All
 )
 
 $image = "fuzzpipe"
+
+function Get-SupportedTargets {
+    return @("cjson", "cjson_old", "yaml", "sqlite")
+}
+
+function Assert-TargetSupported {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TargetName
+    )
+
+    $supported = Get-SupportedTargets
+    if ($supported -notcontains $TargetName) {
+        throw "Unsupported target: $TargetName. Supported targets: $($supported -join ', ')"
+    }
+}
 
 function Show-CommandSummary {
     Write-Host ""
@@ -98,10 +103,13 @@ function Show-Usage {
     Write-Host "  .\fuzz\run.ps1 shell"
     Write-Host "  .\fuzz\run.ps1 help"
     Write-Host "  .\fuzz\run.ps1 summary"
+    Write-Host "  supported targets: cjson, cjson_old, yaml, sqlite"
     Write-Host "  .\fuzz\run.ps1 fuzz [target] [seconds] [-targetRef <ref>]"
     Write-Host "      example: .\fuzz\run.ps1 fuzz cjson 30 -targetRef v1.7.17"
+    Write-Host "      example: .\fuzz\run.ps1 fuzz sqlite 30 -targetRef 3.51.3"
     Write-Host "  .\fuzz\run.ps1 demo-crash [target] [seconds] [-targetRef <ref>]"
     Write-Host "      example: .\fuzz\run.ps1 demo-crash cjson 5 -targetRef v1.7.17"
+    Write-Host "      example: .\fuzz\run.ps1 demo-crash yaml 5"
     Write-Host "  .\fuzz\run.ps1 repro -target <target> -crash <path>"
     Write-Host "  .\fuzz\run.ps1 minimize -target <target> -crash <path>"
     Write-Host "  .\fuzz\run.ps1 triage -target <target> -run <run_dir> [-timeout <sec>]"
@@ -166,6 +174,7 @@ function Get-TargetRootPath {
         [string]$TargetName
     )
 
+    Assert-TargetSupported -TargetName $TargetName
     return Join-Path $PWD "$BaseRelativePath\$TargetName"
 }
 
@@ -199,6 +208,8 @@ function Get-LatestRunDir {
         [string]$TargetName
     )
 
+    Assert-TargetSupported -TargetName $TargetName
+
     $runsRoot = Get-TargetRootPath -BaseRelativePath "artifacts\runs" -TargetName $TargetName
     return Get-LatestDirectoryFromRoot `
         -RootPath $runsRoot `
@@ -211,6 +222,8 @@ function Get-LatestCrashFile {
         [Parameter(Mandatory = $true)]
         [string]$TargetName
     )
+
+    Assert-TargetSupported -TargetName $TargetName
 
     $latestRun = Get-LatestRunDir $TargetName
     $crashDir = Join-Path $latestRun.FullName "crashes"
@@ -233,6 +246,8 @@ function Get-LatestReproDir {
         [string]$TargetName
     )
 
+    Assert-TargetSupported -TargetName $TargetName
+
     $root = Get-TargetRootPath -BaseRelativePath "artifacts\repros" -TargetName $TargetName
     return Get-LatestDirectoryFromRoot `
         -RootPath $root `
@@ -246,6 +261,8 @@ function Get-LatestMinimizeDir {
         [string]$TargetName
     )
 
+    Assert-TargetSupported -TargetName $TargetName
+
     $root = Get-TargetRootPath -BaseRelativePath "artifacts\minimized" -TargetName $TargetName
     return Get-LatestDirectoryFromRoot `
         -RootPath $root `
@@ -258,6 +275,8 @@ function Get-LatestReportDir {
         [Parameter(Mandatory = $true)]
         [string]$TargetName
     )
+
+    Assert-TargetSupported -TargetName $TargetName
 
     $root = Get-TargetRootPath -BaseRelativePath "artifacts\reports" -TargetName $TargetName
     return Get-LatestDirectoryFromRoot `
@@ -376,6 +395,8 @@ function Get-RunIds {
         [string]$TargetName
     )
 
+    Assert-TargetSupported -TargetName $TargetName
+
     $runsRoot = Get-TargetRootPath -BaseRelativePath "artifacts\runs" -TargetName $TargetName
     if (-not (Test-Path $runsRoot)) {
         return [string[]]@()
@@ -394,10 +415,12 @@ function Get-RelatedArtifactDirsForRun {
         [string]$RunId
     )
 
+    Assert-TargetSupported -TargetName $TargetName
+
     $result = [ordered]@{
-        RunDir      = Join-Path (Get-TargetRootPath -BaseRelativePath "artifacts\runs" -TargetName $TargetName) $RunId
-        ReportDir   = Join-Path (Get-TargetRootPath -BaseRelativePath "artifacts\reports" -TargetName $TargetName) $RunId
-        ReproDirs   = @()
+        RunDir       = Join-Path (Get-TargetRootPath -BaseRelativePath "artifacts\runs" -TargetName $TargetName) $RunId
+        ReportDir    = Join-Path (Get-TargetRootPath -BaseRelativePath "artifacts\reports" -TargetName $TargetName) $RunId
+        ReproDirs    = @()
         MinimizeDirs = @()
     }
 
@@ -457,6 +480,8 @@ function Remove-RunArtifacts {
         [string]$RunId
     )
 
+    Assert-TargetSupported -TargetName $TargetName
+
     $related = Get-RelatedArtifactDirsForRun -TargetName $TargetName -RunId $RunId
 
     foreach ($dir in $related.ReproDirs) {
@@ -494,6 +519,8 @@ function Get-RelatedLatestReproMeta {
         [string]$RunId
     )
 
+    Assert-TargetSupported -TargetName $TargetName
+
     $reproRoot = Get-TargetRootPath -BaseRelativePath "artifacts\repros" -TargetName $TargetName
     if (-not (Test-Path $reproRoot)) {
         return $null
@@ -530,6 +557,8 @@ function Get-RelatedLatestMinimizeMeta {
         [string]$RunId
     )
 
+    Assert-TargetSupported -TargetName $TargetName
+
     $minRoot = Get-TargetRootPath -BaseRelativePath "artifacts\minimized" -TargetName $TargetName
     if (-not (Test-Path $minRoot)) {
         return $null
@@ -562,6 +591,8 @@ function Show-Status {
         [Parameter(Mandatory = $true)]
         [string]$TargetName
     )
+
+    Assert-TargetSupported -TargetName $TargetName
 
     $latestRun = Get-LatestRunDir $TargetName
     $metaPath = Join-Path $latestRun.FullName "meta.json"
@@ -633,6 +664,8 @@ elseif ($cmd -eq "shell") {
     exit $LASTEXITCODE
 }
 elseif ($cmd -eq "fuzz") {
+    Assert-TargetSupported -TargetName $target
+
     $envCmd = ""
     if ($seconds -gt 0) { $envCmd = "MAX_TOTAL_TIME=$seconds " }
 
@@ -643,6 +676,8 @@ elseif ($cmd -eq "fuzz") {
     Invoke-InContainer "$bootstrap && ${envCmd}${targetRefEnv}./fuzz/fuzz.sh $target"
 }
 elseif ($cmd -eq "demo-crash") {
+    Assert-TargetSupported -TargetName $target
+
     $sec = $seconds
     if ($sec -le 0) { $sec = 5 }
     $envCmd = "MAX_TOTAL_TIME=$sec "
@@ -654,6 +689,8 @@ elseif ($cmd -eq "demo-crash") {
     Invoke-InContainer "$bootstrap && ${envCmd}${targetRefEnv}./fuzz/fuzz.sh $target demo-crash"
 }
 elseif ($cmd -eq "repro") {
+    Assert-TargetSupported -TargetName $target
+
     $bootstrap = Get-BootstrapCommand
 
     if ($Last) {
@@ -672,6 +709,8 @@ elseif ($cmd -eq "repro") {
     }
 }
 elseif ($cmd -eq "minimize") {
+    Assert-TargetSupported -TargetName $target
+
     $bootstrap = Get-BootstrapCommand
 
     if ($Last) {
@@ -690,6 +729,8 @@ elseif ($cmd -eq "minimize") {
     }
 }
 elseif ($cmd -eq "triage") {
+    Assert-TargetSupported -TargetName $target
+
     $bootstrap = Get-BootstrapCommand
 
     if ($Last) {
@@ -706,6 +747,8 @@ elseif ($cmd -eq "triage") {
     }
 }
 elseif ($cmd -eq "logs") {
+    Assert-TargetSupported -TargetName $target
+
     if (-not $Last) {
         Show-Usage
         exit 1
@@ -715,6 +758,8 @@ elseif ($cmd -eq "logs") {
     Get-Content (Join-Path $latestRun.FullName "run.log")
 }
 elseif ($cmd -eq "meta") {
+    Assert-TargetSupported -TargetName $target
+
     if (-not $Last) {
         Show-Usage
         exit 1
@@ -724,6 +769,8 @@ elseif ($cmd -eq "meta") {
     Get-Content (Join-Path $latestRun.FullName "meta.json")
 }
 elseif ($cmd -eq "report") {
+    Assert-TargetSupported -TargetName $target
+
     if (-not $Last) {
         Show-Usage
         exit 1
@@ -740,6 +787,8 @@ elseif ($cmd -eq "report") {
     Get-Content $reportPath
 }
 elseif ($cmd -eq "report-json") {
+    Assert-TargetSupported -TargetName $target
+
     if (-not $Last) {
         Show-Usage
         exit 1
@@ -756,6 +805,8 @@ elseif ($cmd -eq "report-json") {
     Get-Content $reportPath
 }
 elseif ($cmd -eq "crashes") {
+    Assert-TargetSupported -TargetName $target
+
     if (-not $Last) {
         Show-Usage
         exit 1
@@ -772,6 +823,8 @@ elseif ($cmd -eq "crashes") {
     Get-ChildItem $crashDir
 }
 elseif ($cmd -eq "repro-log") {
+    Assert-TargetSupported -TargetName $target
+
     if (-not $Last) {
         Show-Usage
         exit 1
@@ -781,6 +834,8 @@ elseif ($cmd -eq "repro-log") {
     Get-Content (Join-Path $latestRepro.FullName "repro.log")
 }
 elseif ($cmd -eq "repro-meta") {
+    Assert-TargetSupported -TargetName $target
+
     if (-not $Last) {
         Show-Usage
         exit 1
@@ -790,6 +845,8 @@ elseif ($cmd -eq "repro-meta") {
     Get-Content (Join-Path $latestRepro.FullName "repro_meta.json")
 }
 elseif ($cmd -eq "minimize-log") {
+    Assert-TargetSupported -TargetName $target
+
     if (-not $Last) {
         Show-Usage
         exit 1
@@ -799,6 +856,8 @@ elseif ($cmd -eq "minimize-log") {
     Get-Content (Join-Path $latestMin.FullName "minimize.log")
 }
 elseif ($cmd -eq "minimize-meta") {
+    Assert-TargetSupported -TargetName $target
+
     if (-not $Last) {
         Show-Usage
         exit 1
@@ -808,23 +867,32 @@ elseif ($cmd -eq "minimize-meta") {
     Get-Content (Join-Path $latestMin.FullName "minimize_meta.json")
 }
 elseif ($cmd -eq "runs") {
+    Assert-TargetSupported -TargetName $target
+
     $root = Get-TargetRootPath -BaseRelativePath "artifacts\runs" -TargetName $target
     Show-LatestOrList -RootPath $root -UseLast:$Last
 }
 elseif ($cmd -eq "repros") {
+    Assert-TargetSupported -TargetName $target
+
     $root = Get-TargetRootPath -BaseRelativePath "artifacts\repros" -TargetName $target
     Show-LatestOrList -RootPath $root -UseLast:$Last
 }
 elseif ($cmd -eq "minimized") {
+    Assert-TargetSupported -TargetName $target
+
     $root = Get-TargetRootPath -BaseRelativePath "artifacts\minimized" -TargetName $target
     Show-LatestOrList -RootPath $root -UseLast:$Last
 }
 elseif ($cmd -eq "reports") {
+    Assert-TargetSupported -TargetName $target
+
     $root = Get-TargetRootPath -BaseRelativePath "artifacts\reports" -TargetName $target
     Show-LatestOrList -RootPath $root -UseLast:$Last
 }
-
 elseif ($cmd -eq "get-id") {
+    Assert-TargetSupported -TargetName $target
+
     $ids = @(Get-RunIds -TargetName $target)
 
     if ($ids.Count -eq 0) {
@@ -839,8 +907,9 @@ elseif ($cmd -eq "get-id") {
         $ids
     }
 }
-
 elseif ($cmd -eq "status") {
+    Assert-TargetSupported -TargetName $target
+
     if (-not $Last) {
         Show-Usage
         exit 1
@@ -848,19 +917,17 @@ elseif ($cmd -eq "status") {
 
     Show-Status -TargetName $target
 }
-
 elseif ($cmd -eq "summary") {
     Show-CommandSummary
     exit 0
 }
-
 elseif ($cmd -eq "help") {
     Show-Usage
     exit 0
 }
-
-
 elseif ($cmd -eq "delete") {
+    Assert-TargetSupported -TargetName $target
+
     if ($All) {
         Remove-DirectoryIfExists (Get-TargetRootPath -BaseRelativePath "artifacts\runs" -TargetName $target)
         Remove-DirectoryIfExists (Get-TargetRootPath -BaseRelativePath "artifacts\reports" -TargetName $target)

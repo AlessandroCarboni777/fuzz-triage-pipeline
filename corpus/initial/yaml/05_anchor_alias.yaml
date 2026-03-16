@@ -1,11 +1,11 @@
 default: &default
-  name: base
   enabled: true
+  retries: 3
 
-item1:
+worker1:
   <<: *default
-  id: 1
+  name: alpha
 
-item2:
+worker2:
   <<: *default
-  id: 2
+  name: beta

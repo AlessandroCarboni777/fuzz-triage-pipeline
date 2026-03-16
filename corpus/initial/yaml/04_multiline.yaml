@@ -1,4 +1,8 @@
-description: |
-  This is a multiline
-  YAML example
-  used for fuzzing.
+message: |
+  line one
+  line two
+  line three
+
+note: >
+  this is a folded
+  yaml scalar

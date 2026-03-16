@@ -1,0 +1,3 @@
+CREATE TABLE t1(id INTEGER PRIMARY KEY, name TEXT, age INTEGER);
+INSERT INTO t1(name, age) VALUES('alice', 30);
+SELECT * FROM t1;

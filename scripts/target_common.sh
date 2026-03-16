@@ -56,20 +56,26 @@ fuzzpipe_target_dict_file() {
   find "$dict_dir" -maxdepth 1 -type f -name "*.dict" | sort | head -n 1
 }
 
+fuzzpipe_target_src_root() {
+  local root="$1"
+  local target="$2"
+  echo "$(fuzzpipe_target_dir "$root" "$target")/src"
+}
+
 fuzzpipe_target_git_repo_dir() {
   local root="$1"
   local target="$2"
   local src_root
   local git_dir
 
-  src_root="$(fuzzpipe_target_dir "$root" "$target")/src"
+  src_root="$(fuzzpipe_target_src_root "$root" "$target")"
 
   if [ ! -d "$src_root" ]; then
     echo "$src_root"
     return 0
   fi
 
-  git_dir="$(find "$src_root" -mindepth 1 -maxdepth 3 -type d -name ".git" 2>/dev/null | sort | head -n 1 || true)"
+  git_dir="$(find "$src_root" -mindepth 1 -maxdepth 4 -type d -name ".git" 2>/dev/null | sort | head -n 1 || true)"
 
   if [ -n "$git_dir" ]; then
     dirname "$git_dir"
@@ -77,6 +83,25 @@ fuzzpipe_target_git_repo_dir() {
   fi
 
   echo "$src_root"
+}
+
+fuzzpipe_target_repo_subdir() {
+  local target="$1"
+
+  case "$target" in
+    cjson|cjson_old)
+      echo "cjson"
+      ;;
+    yaml)
+      echo "libyaml"
+      ;;
+    sqlite)
+      echo "sqlite"
+      ;;
+    *)
+      echo ""
+      ;;
+  esac
 }
 
 fuzzpipe_assert_target_exists() {
@@ -106,4 +131,8 @@ fuzzpipe_assert_target_exists() {
     echo "Missing build script for target '$target': $build_script"
     exit 1
   fi
+}
+
+fuzzpipe_list_supported_targets() {
+  echo "cjson cjson_old yaml sqlite"
 }

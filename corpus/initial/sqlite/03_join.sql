@@ -1,0 +1,5 @@
+CREATE TABLE a(id INTEGER PRIMARY KEY, v TEXT);
+CREATE TABLE b(id INTEGER PRIMARY KEY, a_id INTEGER, w TEXT);
+INSERT INTO a(v) VALUES('x');
+INSERT INTO b(a_id, w) VALUES(1, 'y');
+SELECT a.v, b.w FROM a JOIN b ON a.id = b.a_id;

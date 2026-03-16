@@ -5,7 +5,9 @@
       "includePath": [
         "${workspaceFolder}/**",
         "${workspaceFolder}/targets/yaml/src/libyaml/include",
-        "${workspaceFolder}/targets/yaml/src/libyaml/src"
+        "${workspaceFolder}/targets/yaml/src/libyaml/src",
+        "${workspaceFolder}/targets/yaml/out/generated",
+        "${workspaceFolder}/targets/sqlite/src/sqlite"
       ],
       "compilerPath": "C:/MinGW/bin/gcc.exe",
       "cStandard": "${default}",
