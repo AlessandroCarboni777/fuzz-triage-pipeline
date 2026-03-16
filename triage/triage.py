@@ -184,7 +184,8 @@ def sha256_hex(s: str) -> str:
 
 def ensure_dir(p: Path) -> None:
     p.mkdir(parents=True, exist_ok=True)
-    
+
+
 def get_last_run_dir(target: str) -> Path:
     runs_root = Path("/workspace/artifacts/runs") / target
     if not runs_root.exists():
@@ -380,7 +381,7 @@ def score_frame(frame: FrameInfo, target: str) -> FrameInfo:
     if "llvmfuzzertestoneinput" in func_l:
         score += 20
         reason.append("+20 fuzz target entrypoint")
-        
+
     if func_l.startswith("trigger_demo_"):
         score += 120
         reason.append("+120 specific demo crash helper")
@@ -718,7 +719,7 @@ def triage_run(
     for entry in report_json["signatures"]:
         h = entry["signature_hash"]
         names = entry["crashes"]
-        lines.append(f"### `{h[:12]}` — {len(names)} crash(es)")
+        lines.append(f"### `{h[:12]}` - {len(names)} crash(es)")
         lines.append("")
         for n in names:
             lines.append(f"- `{n}`")
@@ -727,7 +728,7 @@ def triage_run(
     lines.append("## Buckets by crash type")
     lines.append("")
     for entry in report_json["buckets"]["by_crash_type"]:
-        lines.append(f"### `{entry['crash_type']}` — {len(entry['crashes'])} crash(es)")
+        lines.append(f"### `{entry['crash_type']}` - {len(entry['crashes'])} crash(es)")
         lines.append("")
         for n in entry["crashes"]:
             lines.append(f"- `{n}`")
@@ -736,7 +737,7 @@ def triage_run(
     lines.append("## Buckets by function")
     lines.append("")
     for entry in report_json["buckets"]["by_function"]:
-        lines.append(f"### `{entry['function']}` — {len(entry['crashes'])} crash(es)")
+        lines.append(f"### `{entry['function']}` - {len(entry['crashes'])} crash(es)")
         lines.append("")
         for n in entry["crashes"]:
             lines.append(f"- `{n}`")
@@ -745,7 +746,7 @@ def triage_run(
     lines.append("## Buckets by location")
     lines.append("")
     for entry in report_json["buckets"]["by_location"]:
-        lines.append(f"### `{entry['location']}` — {len(entry['crashes'])} crash(es)")
+        lines.append(f"### `{entry['location']}` - {len(entry['crashes'])} crash(es)")
         lines.append("")
         for n in entry["crashes"]:
             lines.append(f"- `{n}`")
@@ -755,7 +756,7 @@ def triage_run(
     lines.append("")
     for entry in report_json["buckets"]["by_repro_status"]:
         lines.append(
-            f"### `{entry['repro_status']}` — {len(entry['crashes'])} crash(es)"
+            f"### `{entry['repro_status']}` - {len(entry['crashes'])} crash(es)"
         )
         lines.append("")
         for n in entry["crashes"]:
@@ -817,8 +818,8 @@ def main() -> None:
     )
     ap.add_argument("--target", default="cjson", help="Target name (default: cjson)")
     ap.add_argument(
-    "--run",
-    help="Run directory (repo-relative or absolute)",
+        "--run",
+        help="Run directory (repo-relative or absolute)",
     )
 
     ap.add_argument(
@@ -826,7 +827,7 @@ def main() -> None:
         action="store_true",
         help="Use the latest run directory automatically",
     )
-    
+
     ap.add_argument(
         "--timeout", type=int, default=20, help="Timeout seconds per crash repro"
     )
@@ -841,7 +842,7 @@ def main() -> None:
         if not run_dir.is_absolute():
             run_dir = Path("/workspace") / run_dir
     else:
-        raise SystemExit("Specify --run or --last") 
+        raise SystemExit("Specify --run or --last")
 
     if target == "cjson":
         fuzzer_path = Path("/workspace/targets/cjson/out/cjson_fuzzer")
