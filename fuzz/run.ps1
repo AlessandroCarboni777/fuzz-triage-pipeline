@@ -30,7 +30,7 @@ param(
     [string]$cmd,
 
     [Parameter(Position = 1)]
-    [string]$target = "cjson",
+    [string]$target = "",
 
     [Parameter(Position = 2)]
     [int]$seconds = 0,
@@ -61,6 +61,20 @@ function Assert-TargetSupported {
     if ($supported -notcontains $TargetName) {
         throw "Unsupported target: $TargetName. Supported targets: $($supported -join ', ')"
     }
+}
+
+function Resolve-RequiredTarget {
+    param(
+        [string]$TargetName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($TargetName)) {
+        $supported = Get-SupportedTargets
+        throw "Target required for command '$cmd'. Supported targets: $($supported -join ', ')"
+    }
+
+    Assert-TargetSupported -TargetName $TargetName
+    return $TargetName
 }
 
 function Show-CommandSummary {
@@ -104,46 +118,51 @@ function Show-Usage {
     Write-Host "  .\fuzz\run.ps1 help"
     Write-Host "  .\fuzz\run.ps1 summary"
     Write-Host "  supported targets: cjson, cjson_old, yaml, sqlite"
-    Write-Host "  .\fuzz\run.ps1 fuzz [target] [seconds] [-targetRef <ref>]"
+    Write-Host ""
+    Write-Host "Target-based commands always require an explicit target."
+    Write-Host ""
+    Write-Host "  .\fuzz\run.ps1 fuzz <target> [seconds] [-targetRef <ref>]"
     Write-Host "      example: .\fuzz\run.ps1 fuzz cjson 30 -targetRef v1.7.17"
     Write-Host "      example: .\fuzz\run.ps1 fuzz sqlite 30 -targetRef 3.51.3"
-    Write-Host "  .\fuzz\run.ps1 demo-crash [target] [seconds] [-targetRef <ref>]"
+    Write-Host ""
+    Write-Host "  .\fuzz\run.ps1 demo-crash <target> [seconds] [-targetRef <ref>]"
     Write-Host "      example: .\fuzz\run.ps1 demo-crash cjson 5 -targetRef v1.7.17"
     Write-Host "      example: .\fuzz\run.ps1 demo-crash yaml 5"
-    Write-Host "  .\fuzz\run.ps1 repro -target <target> -crash <path>"
-    Write-Host "  .\fuzz\run.ps1 minimize -target <target> -crash <path>"
-    Write-Host "  .\fuzz\run.ps1 triage -target <target> -run <run_dir> [-timeout <sec>]"
+    Write-Host ""
+    Write-Host "  .\fuzz\run.ps1 repro <target> -crash <path>"
+    Write-Host "  .\fuzz\run.ps1 minimize <target> -crash <path>"
+    Write-Host "  .\fuzz\run.ps1 triage <target> -run <run_dir> [-timeout <sec>]"
     Write-Host ""
     Write-Host "Quick commands:"
-    Write-Host "  .\fuzz\run.ps1 triage -Last"
-    Write-Host "  .\fuzz\run.ps1 repro -Last"
-    Write-Host "  .\fuzz\run.ps1 minimize -Last"
-    Write-Host "  .\fuzz\run.ps1 logs -Last"
-    Write-Host "  .\fuzz\run.ps1 meta -Last"
-    Write-Host "  .\fuzz\run.ps1 report -Last"
-    Write-Host "  .\fuzz\run.ps1 report-json -Last"
-    Write-Host "  .\fuzz\run.ps1 crashes -Last"
-    Write-Host "  .\fuzz\run.ps1 repro-log -Last"
-    Write-Host "  .\fuzz\run.ps1 repro-meta -Last"
-    Write-Host "  .\fuzz\run.ps1 minimize-log -Last"
-    Write-Host "  .\fuzz\run.ps1 minimize-meta -Last"
-    Write-Host "  .\fuzz\run.ps1 get-id -Last"
-    Write-Host "  .\fuzz\run.ps1 status -Last"
+    Write-Host "  .\fuzz\run.ps1 triage <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 repro <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 minimize <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 logs <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 meta <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 report <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 report-json <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 crashes <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 repro-log <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 repro-meta <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 minimize-log <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 minimize-meta <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 get-id <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 status <target> -Last"
     Write-Host ""
     Write-Host "Artifact listings:"
-    Write-Host "  .\fuzz\run.ps1 runs"
-    Write-Host "  .\fuzz\run.ps1 runs -Last"
-    Write-Host "  .\fuzz\run.ps1 repros"
-    Write-Host "  .\fuzz\run.ps1 repros -Last"
-    Write-Host "  .\fuzz\run.ps1 minimized"
-    Write-Host "  .\fuzz\run.ps1 minimized -Last"
-    Write-Host "  .\fuzz\run.ps1 reports"
-    Write-Host "  .\fuzz\run.ps1 reports -Last"
+    Write-Host "  .\fuzz\run.ps1 runs <target>"
+    Write-Host "  .\fuzz\run.ps1 runs <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 repros <target>"
+    Write-Host "  .\fuzz\run.ps1 repros <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 minimized <target>"
+    Write-Host "  .\fuzz\run.ps1 minimized <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 reports <target>"
+    Write-Host "  .\fuzz\run.ps1 reports <target> -Last"
     Write-Host ""
     Write-Host "Deletion:"
-    Write-Host "  .\fuzz\run.ps1 delete -Last"
-    Write-Host "  .\fuzz\run.ps1 delete -Id <run_id>"
-    Write-Host "  .\fuzz\run.ps1 delete -All"
+    Write-Host "  .\fuzz\run.ps1 delete <target> -Last"
+    Write-Host "  .\fuzz\run.ps1 delete <target> -Id <run_id>"
+    Write-Host "  .\fuzz\run.ps1 delete <target> -All"
     Write-Host ""
     Write-Host "Optional environment variables passed through to the container if set:"
     Write-Host "  FUZZPIPE_SANITIZERS, ASAN_OPTIONS, UBSAN_OPTIONS, ASAN_SYMBOLIZER_PATH"
@@ -664,7 +683,7 @@ elseif ($cmd -eq "shell") {
     exit $LASTEXITCODE
 }
 elseif ($cmd -eq "fuzz") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     $envCmd = ""
     if ($seconds -gt 0) { $envCmd = "MAX_TOTAL_TIME=$seconds " }
@@ -676,7 +695,7 @@ elseif ($cmd -eq "fuzz") {
     Invoke-InContainer "$bootstrap && ${envCmd}${targetRefEnv}./fuzz/fuzz.sh $target"
 }
 elseif ($cmd -eq "demo-crash") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     $sec = $seconds
     if ($sec -le 0) { $sec = 5 }
@@ -689,7 +708,7 @@ elseif ($cmd -eq "demo-crash") {
     Invoke-InContainer "$bootstrap && ${envCmd}${targetRefEnv}./fuzz/fuzz.sh $target demo-crash"
 }
 elseif ($cmd -eq "repro") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     $bootstrap = Get-BootstrapCommand
 
@@ -709,7 +728,7 @@ elseif ($cmd -eq "repro") {
     }
 }
 elseif ($cmd -eq "minimize") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     $bootstrap = Get-BootstrapCommand
 
@@ -729,7 +748,7 @@ elseif ($cmd -eq "minimize") {
     }
 }
 elseif ($cmd -eq "triage") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     $bootstrap = Get-BootstrapCommand
 
@@ -747,7 +766,7 @@ elseif ($cmd -eq "triage") {
     }
 }
 elseif ($cmd -eq "logs") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     if (-not $Last) {
         Show-Usage
@@ -758,7 +777,7 @@ elseif ($cmd -eq "logs") {
     Get-Content (Join-Path $latestRun.FullName "run.log")
 }
 elseif ($cmd -eq "meta") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     if (-not $Last) {
         Show-Usage
@@ -769,7 +788,7 @@ elseif ($cmd -eq "meta") {
     Get-Content (Join-Path $latestRun.FullName "meta.json")
 }
 elseif ($cmd -eq "report") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     if (-not $Last) {
         Show-Usage
@@ -787,7 +806,7 @@ elseif ($cmd -eq "report") {
     Get-Content $reportPath
 }
 elseif ($cmd -eq "report-json") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     if (-not $Last) {
         Show-Usage
@@ -805,7 +824,7 @@ elseif ($cmd -eq "report-json") {
     Get-Content $reportPath
 }
 elseif ($cmd -eq "crashes") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     if (-not $Last) {
         Show-Usage
@@ -823,7 +842,7 @@ elseif ($cmd -eq "crashes") {
     Get-ChildItem $crashDir
 }
 elseif ($cmd -eq "repro-log") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     if (-not $Last) {
         Show-Usage
@@ -834,7 +853,7 @@ elseif ($cmd -eq "repro-log") {
     Get-Content (Join-Path $latestRepro.FullName "repro.log")
 }
 elseif ($cmd -eq "repro-meta") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     if (-not $Last) {
         Show-Usage
@@ -845,7 +864,7 @@ elseif ($cmd -eq "repro-meta") {
     Get-Content (Join-Path $latestRepro.FullName "repro_meta.json")
 }
 elseif ($cmd -eq "minimize-log") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     if (-not $Last) {
         Show-Usage
@@ -856,7 +875,7 @@ elseif ($cmd -eq "minimize-log") {
     Get-Content (Join-Path $latestMin.FullName "minimize.log")
 }
 elseif ($cmd -eq "minimize-meta") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     if (-not $Last) {
         Show-Usage
@@ -867,31 +886,31 @@ elseif ($cmd -eq "minimize-meta") {
     Get-Content (Join-Path $latestMin.FullName "minimize_meta.json")
 }
 elseif ($cmd -eq "runs") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     $root = Get-TargetRootPath -BaseRelativePath "artifacts\runs" -TargetName $target
     Show-LatestOrList -RootPath $root -UseLast:$Last
 }
 elseif ($cmd -eq "repros") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     $root = Get-TargetRootPath -BaseRelativePath "artifacts\repros" -TargetName $target
     Show-LatestOrList -RootPath $root -UseLast:$Last
 }
 elseif ($cmd -eq "minimized") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     $root = Get-TargetRootPath -BaseRelativePath "artifacts\minimized" -TargetName $target
     Show-LatestOrList -RootPath $root -UseLast:$Last
 }
 elseif ($cmd -eq "reports") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     $root = Get-TargetRootPath -BaseRelativePath "artifacts\reports" -TargetName $target
     Show-LatestOrList -RootPath $root -UseLast:$Last
 }
 elseif ($cmd -eq "get-id") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     $ids = @(Get-RunIds -TargetName $target)
 
@@ -908,7 +927,7 @@ elseif ($cmd -eq "get-id") {
     }
 }
 elseif ($cmd -eq "status") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     if (-not $Last) {
         Show-Usage
@@ -926,7 +945,7 @@ elseif ($cmd -eq "help") {
     exit 0
 }
 elseif ($cmd -eq "delete") {
-    Assert-TargetSupported -TargetName $target
+    $target = Resolve-RequiredTarget $target
 
     if ($All) {
         Remove-DirectoryIfExists (Get-TargetRootPath -BaseRelativePath "artifacts\runs" -TargetName $target)

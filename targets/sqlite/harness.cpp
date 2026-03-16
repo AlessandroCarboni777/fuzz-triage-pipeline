@@ -5,6 +5,10 @@
 
 #include <sqlite3.h>
 
+#ifndef SQLITE_PREPARE_PERSISTENT
+#define SQLITE_PREPARE_PERSISTENT 0
+#endif
+
 static bool env_enabled(const char* name) {
     const char* v = std::getenv(name);
     return v &&
@@ -36,6 +40,27 @@ static void exec_script(sqlite3* db, const char* sql) {
     }
 }
 
+static int prepare_stmt(sqlite3* db, const char* sql, sqlite3_stmt** stmt, const char** next) {
+#if defined(SQLITE_VERSION_NUMBER) && SQLITE_VERSION_NUMBER >= 3020000
+    return sqlite3_prepare_v3(
+        db,
+        sql,
+        -1,
+        SQLITE_PREPARE_PERSISTENT,
+        stmt,
+        next
+    );
+#else
+    return sqlite3_prepare_v2(
+        db,
+        sql,
+        -1,
+        stmt,
+        next
+    );
+#endif
+}
+
 static void exercise_prepared_statements(sqlite3* db, const char* sql) {
     const char* tail = sql;
     int budget = 64;
@@ -44,14 +69,7 @@ static void exercise_prepared_statements(sqlite3* db, const char* sql) {
         sqlite3_stmt* stmt = nullptr;
         const char* next = nullptr;
 
-        int rc = sqlite3_prepare_v3(
-            db,
-            tail,
-            -1,
-            SQLITE_PREPARE_PERSISTENT,
-            &stmt,
-            &next
-        );
+        int rc = prepare_stmt(db, tail, &stmt, &next);
 
         if (rc != SQLITE_OK) {
             break;
@@ -109,11 +127,41 @@ static void exercise_backup(sqlite3* src_db) {
 }
 
 static void exercise_serialize(sqlite3* db) {
+#if defined(SQLITE_VERSION_NUMBER) && SQLITE_VERSION_NUMBER >= 3019000
     sqlite3_int64 out_size = 0;
     unsigned char* image = sqlite3_serialize(db, "main", &out_size, 0);
     if (image) {
         sqlite3_free(image);
     }
+#else
+    (void)db;
+#endif
+}
+
+static void configure_db(sqlite3* db) {
+#ifdef SQLITE_DBCONFIG_DEFENSIVE
+    sqlite3_db_config(db, SQLITE_DBCONFIG_DEFENSIVE, 1, nullptr);
+#endif
+
+#ifdef SQLITE_DBCONFIG_ENABLE_TRIGGER
+    sqlite3_db_config(db, SQLITE_DBCONFIG_ENABLE_TRIGGER, 1, nullptr);
+#endif
+
+#ifdef SQLITE_DBCONFIG_ENABLE_VIEW
+    sqlite3_db_config(db, SQLITE_DBCONFIG_ENABLE_VIEW, 1, nullptr);
+#endif
+
+    sqlite3_limit(db, SQLITE_LIMIT_SQL_LENGTH, 1 << 20);
+    sqlite3_limit(db, SQLITE_LIMIT_EXPR_DEPTH, 200);
+    sqlite3_limit(db, SQLITE_LIMIT_COMPOUND_SELECT, 50);
+}
+
+static void prime_db(sqlite3* db) {
+    exec_script(db, "PRAGMA foreign_keys=ON;");
+    exec_script(db, "PRAGMA journal_mode=OFF;");
+    exec_script(db, "PRAGMA synchronous=OFF;");
+    exec_script(db, "CREATE TABLE IF NOT EXISTS fuzz(a, b, c);");
+    exec_script(db, "CREATE TEMP TABLE IF NOT EXISTS temp_fuzz(x);");
 }
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
@@ -142,19 +190,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
         return 0;
     }
 
-    sqlite3_db_config(db, SQLITE_DBCONFIG_DEFENSIVE, 1, nullptr);
-    sqlite3_db_config(db, SQLITE_DBCONFIG_ENABLE_TRIGGER, 1, nullptr);
-    sqlite3_db_config(db, SQLITE_DBCONFIG_ENABLE_VIEW, 1, nullptr);
-
-    sqlite3_limit(db, SQLITE_LIMIT_SQL_LENGTH, 1 << 20);
-    sqlite3_limit(db, SQLITE_LIMIT_EXPR_DEPTH, 200);
-    sqlite3_limit(db, SQLITE_LIMIT_COMPOUND_SELECT, 50);
-
-    exec_script(db, "PRAGMA foreign_keys=ON;");
-    exec_script(db, "PRAGMA journal_mode=OFF;");
-    exec_script(db, "PRAGMA synchronous=OFF;");
-    exec_script(db, "CREATE TABLE IF NOT EXISTS fuzz(a, b, c);");
-    exec_script(db, "CREATE TEMP TABLE IF NOT EXISTS temp_fuzz(x);");
+    configure_db(db);
+    prime_db(db);
 
     (void)sqlite3_complete(buf);
     exec_script(db, buf);
@@ -166,6 +203,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
 
     sqlite3* db2 = nullptr;
     if (sqlite3_open(":memory:", &db2) == SQLITE_OK) {
+        configure_db(db2);
+        prime_db(db2);
         exec_script(db2, buf);
         exercise_prepared_statements(db2, buf);
         sqlite3_close(db2);
