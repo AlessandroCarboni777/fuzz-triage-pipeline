@@ -65,7 +65,9 @@ class CrashResult:
     minimize_meta_path: str | None
 
 
-def run_cmd(cmd: list[str], timeout_sec: int = 30, extra_env: dict[str, str] | None = None) -> tuple[int, str]:
+def run_cmd(
+    cmd: list[str], timeout_sec: int = 30, extra_env: dict[str, str] | None = None
+) -> tuple[int, str]:
     env = os.environ.copy()
 
     llvm_symbolizer = subprocess.getoutput("command -v llvm-symbolizer").strip()
@@ -261,7 +263,9 @@ def detect_crash_origin(meta: dict[str, Any]) -> str:
     return "real"
 
 
-def triage_run(target: str, run_dir: Path, fuzzer_path: Path, timeout_sec: int) -> dict[str, Any]:
+def triage_run(
+    target: str, run_dir: Path, fuzzer_path: Path, timeout_sec: int
+) -> dict[str, Any]:
     crashes_dir = run_dir / "crashes"
     if not crashes_dir.exists():
         raise SystemExit(f"Crashes directory not found: {crashes_dir}")
@@ -365,11 +369,15 @@ def triage_run(target: str, run_dir: Path, fuzzer_path: Path, timeout_sec: int) 
             ],
             "by_function": [
                 {"function": k, "crashes": v}
-                for k, v in sorted(by_function.items(), key=lambda x: (-len(x[1]), x[0]))
+                for k, v in sorted(
+                    by_function.items(), key=lambda x: (-len(x[1]), x[0])
+                )
             ],
             "by_location": [
                 {"location": k, "crashes": v}
-                for k, v in sorted(by_location.items(), key=lambda x: (-len(x[1]), x[0]))
+                for k, v in sorted(
+                    by_location.items(), key=lambda x: (-len(x[1]), x[0])
+                )
             ],
         },
         "crashes": [
@@ -398,7 +406,9 @@ def triage_run(target: str, run_dir: Path, fuzzer_path: Path, timeout_sec: int) 
         ],
     }
 
-    (report_dir / "report.json").write_text(json.dumps(report_json, indent=2), encoding="utf-8")
+    (report_dir / "report.json").write_text(
+        json.dumps(report_json, indent=2), encoding="utf-8"
+    )
 
     lines: list[str] = []
     lines.append(f"# Fuzz Triage Report — {target}")
@@ -512,10 +522,16 @@ def triage_run(target: str, run_dir: Path, fuzzer_path: Path, timeout_sec: int) 
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Triage crashes for a fuzz run and generate report.")
+    ap = argparse.ArgumentParser(
+        description="Triage crashes for a fuzz run and generate report."
+    )
     ap.add_argument("--target", default="cjson", help="Target name (default: cjson)")
-    ap.add_argument("--run", required=True, help="Run directory (repo-relative or absolute)")
-    ap.add_argument("--timeout", type=int, default=20, help="Timeout seconds per crash repro")
+    ap.add_argument(
+        "--run", required=True, help="Run directory (repo-relative or absolute)"
+    )
+    ap.add_argument(
+        "--timeout", type=int, default=20, help="Timeout seconds per crash repro"
+    )
     args = ap.parse_args()
 
     target = args.target
