@@ -19,3 +19,5 @@ artifacts/runs/**
 artifacts/reports/**
 artifacts/repros/**
 !artifacts/**/.gitkeep
+
+artifacts/
