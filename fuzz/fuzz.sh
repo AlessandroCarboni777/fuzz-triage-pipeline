@@ -6,6 +6,9 @@ MODE="${2:-normal}"   # normal | demo-crash
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+source "$ROOT/scripts/diagnostics_env.sh"
+fuzzpipe_setup_diagnostics_env
+
 # Unique run id
 RUN_ID="$(date +%Y-%m-%d_%H%M%S)"
 
@@ -34,6 +37,12 @@ write_meta() {
   "target_version": "$target_version",
   "target_ref": "${TARGET_REF:-master}",
   "fuzzer": "libFuzzer",
+  "diagnostics": {
+    "sanitizers": "${FUZZPIPE_SANITIZERS}",
+    "asan_symbolizer_path": "${ASAN_SYMBOLIZER_PATH:-}",
+    "asan_options": "${ASAN_OPTIONS}",
+    "ubsan_options": "${UBSAN_OPTIONS}"
+  },
   "args": {
     "max_total_time": $MAX_TOTAL_TIME,
     "max_len": $MAX_LEN,
@@ -92,6 +101,8 @@ if [ "$TARGET" = "cjson" ]; then
   fi
 
   echo "[+] Running libFuzzer" | tee -a "$LOG_FILE"
+  fuzzpipe_print_diagnostics_env | tee -a "$LOG_FILE"
+  echo "[+] FUZZPIPE_DEMO_CRASH=$FUZZPIPE_DEMO_CRASH" | tee -a "$LOG_FILE"
 
   FUZZ_ARGS=(
     "-artifact_prefix=$CRASH_DIR/"
@@ -109,15 +120,6 @@ if [ "$TARGET" = "cjson" ]; then
   if [ "$MAX_TOTAL_TIME" != "0" ]; then
     FUZZ_ARGS+=("-max_total_time=$MAX_TOTAL_TIME")
   fi
-
-  export ASAN_SYMBOLIZER_PATH="${ASAN_SYMBOLIZER_PATH:-$(command -v llvm-symbolizer || true)}"
-  export UBSAN_OPTIONS="${UBSAN_OPTIONS:-print_stacktrace=1:halt_on_error=1}"
-  export ASAN_OPTIONS="${ASAN_OPTIONS:-symbolize=1:detect_leaks=0:abort_on_error=1}"
-
-  echo "[+] ASAN_SYMBOLIZER_PATH=${ASAN_SYMBOLIZER_PATH:-unset}" | tee -a "$LOG_FILE"
-  echo "[+] UBSAN_OPTIONS=$UBSAN_OPTIONS" | tee -a "$LOG_FILE"
-  echo "[+] ASAN_OPTIONS=$ASAN_OPTIONS" | tee -a "$LOG_FILE"
-  echo "[+] FUZZPIPE_DEMO_CRASH=$FUZZPIPE_DEMO_CRASH" | tee -a "$LOG_FILE"
 
   "$FUZZER" "${FUZZ_ARGS[@]}" "$CORPUS_DIR" 2>&1 | tee -a "$LOG_FILE"
 

@@ -23,12 +23,24 @@ UBSAN_ERROR_RE = re.compile(r"runtime error:\s+(.*)")
 LIBFUZZER_ERROR_RE = re.compile(r"ERROR:\s+libFuzzer:\s+(.+)")
 
 STACK_FRAME_LOCATION_RE = re.compile(
-    r"^\s*#\d+\s+.*?\sin\s+(?P<func>.+?)\s+(?P<file>/[^:\s]+):(?P<line>\d+)(?::\d+)?\s*$"
+    r"^\s*#(?P<idx>\d+)\s+.*?\sin\s+(?P<func>.+?)\s+(?P<file>/[^:\s]+):(?P<line>\d+)(?::(?P<col>\d+))?\s*$"
+)
+
+STACK_FRAME_FALLBACK_RE = re.compile(
+    r"^\s*#(?P<idx>\d+)\s+.*?\sin\s+(?P<func>.+?)\s+\((?P<obj>/[^)]+)\+0x[0-9a-fA-F]+\)\s*$"
 )
 
 ASAN_SUMMARY_RE = re.compile(
     r"SUMMARY:\s+AddressSanitizer:\s+(?P<crash_type>[A-Za-z0-9_-]+)\s+(?P<file>/[^:\s]+):(?P<line>\d+)\s+in\s+(?P<func>.+)"
 )
+
+LIBFUZZER_SUMMARY_RE = re.compile(r"SUMMARY:\s+libFuzzer:\s+(?P<crash_type>.+)")
+SIGNAL_LINE_RE = re.compile(r"deadly signal", re.IGNORECASE)
+TIMEOUT_RE = re.compile(r"timeout", re.IGNORECASE)
+OOM_RE = re.compile(r"(out[- ]of[- ]memory|oom)", re.IGNORECASE)
+ABORT_RE = re.compile(r"\babort\b", re.IGNORECASE)
+SIGSEGV_RE = re.compile(r"(sigsegv|segmentation fault)", re.IGNORECASE)
+SIGABRT_RE = re.compile(r"(sigabrt)", re.IGNORECASE)
 
 
 @dataclass
@@ -42,18 +54,34 @@ class MinimizeInfo:
 
 
 @dataclass
+class FrameInfo:
+    raw: str
+    index: int | None
+    function: str
+    file_path: str
+    line: int | None
+    column: int | None
+    score: int
+    reason: list[str]
+
+
+@dataclass
 class CrashResult:
     crash_file: str
     crash_path: str
     exit_code: int
+    repro_status: str
     signature: str
     signature_hash: str
     stacktrace: list[str]
     log_path: str
-    crash_type: str
+    raw_crash_type: str
+    normalized_crash_type: str
     crash_function: str
     crash_file_path: str
     crash_line: int | None
+    root_cause_score: int | None
+    root_cause_reason: list[str]
     bucket_type: str
     bucket_function: str
     bucket_location: str
@@ -103,36 +131,51 @@ def extract_stacktrace(output: str) -> list[str]:
     lines = output.splitlines()
     stack: list[str] = []
 
-    in_stack = False
+    in_primary_stack = False
+
     for ln in lines:
         if (
             "ERROR: libFuzzer:" in ln
             or "ERROR: AddressSanitizer:" in ln
-            or "AddressSanitizer:" in ln
             or "UndefinedBehaviorSanitizer" in ln
             or "runtime error:" in ln
         ):
-            in_stack = True
+            in_primary_stack = True
+            continue
 
-        if in_stack and STACK_LINE_RE.match(ln):
-            stack.append(normalize_stack_line(ln))
+        if not in_primary_stack:
+            continue
 
-        if in_stack and ln.startswith("SUMMARY:"):
+        stripped = ln.strip()
+
+        if stripped.startswith("freed by thread"):
             break
+        if stripped.startswith("previously allocated by thread"):
+            break
+        if stripped.startswith("SUMMARY:"):
+            break
+        if stripped.startswith("Shadow bytes around"):
+            break
+        if stripped.startswith("Shadow byte legend"):
+            break
+
+        if STACK_LINE_RE.match(ln):
+            stack.append(normalize_stack_line(ln))
 
     if not stack:
         for ln in lines:
             if STACK_LINE_RE.match(ln):
                 stack.append(normalize_stack_line(ln))
-            if len(stack) >= 30:
+            if len(stack) >= 12:
                 break
 
-    return stack
+    return stack[:12]
 
 
 def signature_from_stack(stack: list[str]) -> str:
-    top = stack[:12] if stack else ["NO_STACKTRACE"]
-    return "\n".join(top)
+    if not stack:
+        return "NO_STACKTRACE"
+    return "\n".join(stack[:8])
 
 
 def sha256_hex(s: str) -> str:
@@ -141,6 +184,22 @@ def sha256_hex(s: str) -> str:
 
 def ensure_dir(p: Path) -> None:
     p.mkdir(parents=True, exist_ok=True)
+    
+def get_last_run_dir(target: str) -> Path:
+    runs_root = Path("/workspace/artifacts/runs") / target
+    if not runs_root.exists():
+        raise SystemExit(f"No runs found for target: {target}")
+
+    runs = sorted(
+        [p for p in runs_root.iterdir() if p.is_dir()],
+        key=lambda p: p.name,
+        reverse=True,
+    )
+
+    if not runs:
+        raise SystemExit(f"No run directories found for target: {target}")
+
+    return runs[0]
 
 
 def load_meta(run_dir: Path) -> dict[str, Any]:
@@ -153,11 +212,12 @@ def load_meta(run_dir: Path) -> dict[str, Any]:
 def load_minimized_index(target: str) -> dict[str, MinimizeInfo]:
     minimized_root = Path("/workspace/artifacts/minimized") / target
     index: dict[str, MinimizeInfo] = {}
+    newest_ts: dict[str, str] = {}
 
     if not minimized_root.exists():
         return index
 
-    for meta_file in minimized_root.glob("*/minimize_meta.json"):
+    for meta_file in sorted(minimized_root.glob("*/minimize_meta.json")):
         try:
             data = json.loads(meta_file.read_text(encoding="utf-8"))
         except Exception:
@@ -165,10 +225,15 @@ def load_minimized_index(target: str) -> dict[str, MinimizeInfo]:
 
         crash_path = str(data.get("crash_path", "")).strip()
         minimized_path = str(data.get("minimized_path", "")).strip()
+        ts = str(data.get("timestamp", "")).strip()
 
         if not crash_path:
             continue
 
+        if crash_path in newest_ts and newest_ts[crash_path] >= ts:
+            continue
+
+        newest_ts[crash_path] = ts
         index[crash_path] = MinimizeInfo(
             crash_path=crash_path,
             minimized_path=minimized_path,
@@ -181,7 +246,7 @@ def load_minimized_index(target: str) -> dict[str, MinimizeInfo]:
     return index
 
 
-def detect_crash_type(output: str) -> str:
+def detect_raw_crash_type(output: str) -> str:
     for line in output.splitlines():
         m = ASAN_ERROR_RE.search(line)
         if m:
@@ -197,10 +262,157 @@ def detect_crash_type(output: str) -> str:
         if m:
             return m.group(1).strip()
 
+    for line in output.splitlines():
+        m = LIBFUZZER_SUMMARY_RE.search(line)
+        if m:
+            return m.group("crash_type").strip()
+
     return "unknown"
 
 
-def extract_root_cause(output: str, stack: list[str]) -> tuple[str, str, int | None]:
+def normalize_crash_type(raw: str, output: str, exit_code: int) -> str:
+    raw_l = (raw or "").strip().lower()
+    out_l = output.lower()
+
+    if "heap-buffer-overflow" in raw_l:
+        return "heap-buffer-overflow"
+    if "stack-buffer-overflow" in raw_l:
+        return "stack-buffer-overflow"
+    if "use-after-free" in raw_l:
+        return "use-after-free"
+    if "double-free" in raw_l:
+        return "double-free"
+    if "null" in raw_l and "dereference" in raw_l:
+        return "null-deref"
+    if "deadly signal" in raw_l:
+        return "deadly-signal"
+
+    if raw_l.startswith("ubsan:"):
+        if "signed integer overflow" in raw_l:
+            return "signed-integer-overflow"
+        if "unsigned integer overflow" in raw_l:
+            return "unsigned-integer-overflow"
+        if "shift" in raw_l:
+            return "invalid-shift"
+        if "null pointer" in raw_l:
+            return "null-deref"
+        if "insufficient space for an object of type" in raw_l:
+            return "ubsan-type-mismatch"
+        if "type mismatch" in raw_l:
+            return "ubsan-type-mismatch"
+        if "misaligned address" in raw_l:
+            return "ubsan-misaligned-address"
+        return "ubsan"
+
+    if TIMEOUT_RE.search(raw_l) or TIMEOUT_RE.search(out_l):
+        return "timeout"
+    if OOM_RE.search(raw_l) or OOM_RE.search(out_l):
+        return "oom"
+    if SIGSEGV_RE.search(raw_l) or SIGSEGV_RE.search(out_l):
+        return "sigsegv"
+    if SIGABRT_RE.search(raw_l) or SIGABRT_RE.search(out_l):
+        return "sigabrt"
+
+    if ABORT_RE.search(out_l):
+        return "abort"
+
+    if exit_code in (134, -6):
+        return "abort"
+    if exit_code in (139, -11):
+        return "sigsegv"
+
+    return raw_l or "unknown"
+
+
+def parse_frame(frame: str) -> FrameInfo | None:
+    m = STACK_FRAME_LOCATION_RE.match(frame)
+    if m:
+        return FrameInfo(
+            raw=frame,
+            index=int(m.group("idx")),
+            function=m.group("func").strip(),
+            file_path=m.group("file").strip(),
+            line=int(m.group("line")) if m.group("line") else None,
+            column=int(m.group("col")) if m.group("col") else None,
+            score=0,
+            reason=[],
+        )
+
+    m2 = STACK_FRAME_FALLBACK_RE.match(frame)
+    if m2:
+        return FrameInfo(
+            raw=frame,
+            index=int(m2.group("idx")),
+            function=m2.group("func").strip(),
+            file_path=m2.group("obj").strip(),
+            line=None,
+            column=None,
+            score=0,
+            reason=[],
+        )
+
+    return None
+
+
+def score_frame(frame: FrameInfo, target: str) -> FrameInfo:
+    score = 0
+    reason: list[str] = []
+
+    func_l = frame.function.lower()
+    path_l = frame.file_path.lower()
+
+    if frame.line is not None:
+        score += 10
+        reason.append("+10 has line info")
+
+    if "/workspace/targets/" in frame.file_path:
+        score += 50
+        reason.append("+50 workspace target source")
+
+    if f"/workspace/targets/{target}/" in frame.file_path:
+        score += 30
+        reason.append("+30 current target source")
+
+    if path_l.endswith("harness.cpp"):
+        score += 40
+        reason.append("+40 harness frame")
+
+    if "llvmfuzzertestoneinput" in func_l:
+        score += 20
+        reason.append("+20 fuzz target entrypoint")
+        
+    if func_l.startswith("trigger_demo_"):
+        score += 120
+        reason.append("+120 specific demo crash helper")
+
+    if "libfuzzer" in func_l or "fuzzer::" in func_l:
+        score -= 100
+        reason.append("-100 libFuzzer internal")
+
+    if "__sanitizer" in func_l or "sanitizer" in func_l:
+        score -= 100
+        reason.append("-100 sanitizer internal")
+
+    if path_l.startswith("/usr/") or path_l.startswith("/lib/"):
+        score -= 80
+        reason.append("-80 system library")
+
+    if "libc.so" in path_l or "libstdc++" in path_l:
+        score -= 80
+        reason.append("-80 runtime library")
+
+    if frame.index is not None:
+        score += max(0, 20 - frame.index)
+        reason.append(f"+{max(0, 20 - frame.index)} early frame")
+
+    frame.score = score
+    frame.reason = reason
+    return frame
+
+
+def extract_root_cause(
+    output: str, stack: list[str], target: str
+) -> tuple[str, str, int | None, int | None, list[str]]:
     lines = output.splitlines()
 
     for raw in lines:
@@ -209,35 +421,26 @@ def extract_root_cause(output: str, stack: list[str]) -> tuple[str, str, int | N
             func = m.group("func").strip()
             file_path = m.group("file").strip()
             line = int(m.group("line"))
-            return func, file_path, line
+            return func, file_path, line, 999, ["asan summary"]
 
-    for frame in stack:
-        m = STACK_FRAME_LOCATION_RE.match(frame)
-        if not m:
+    scored_frames: list[FrameInfo] = []
+    for raw_frame in stack:
+        parsed = parse_frame(raw_frame)
+        if not parsed:
             continue
+        scored_frames.append(score_frame(parsed, target))
 
-        func = m.group("func").strip()
-        file_path = m.group("file").strip()
-        line = int(m.group("line"))
+    if scored_frames:
+        best = sorted(
+            scored_frames,
+            key=lambda fr: (
+                -fr.score,
+                fr.index if fr.index is not None else 9999,
+            ),
+        )[0]
+        return best.function, best.file_path, best.line, best.score, best.reason
 
-        if "libFuzzer" in func or "fuzzer::" in func:
-            continue
-        if "__sanitizer" in func:
-            continue
-        if "/usr/" in file_path or "/lib/" in file_path:
-            continue
-
-        return func, file_path, line
-
-    for frame in stack:
-        m = STACK_FRAME_LOCATION_RE.match(frame)
-        if m:
-            func = m.group("func").strip()
-            file_path = m.group("file").strip()
-            line = int(m.group("line"))
-            return func, file_path, line
-
-    return "unknown", "unknown", None
+    return "unknown", "unknown", None, None, ["no usable frame"]
 
 
 def make_location_bucket(file_path: str, line: int | None) -> str:
@@ -263,6 +466,30 @@ def detect_crash_origin(meta: dict[str, Any]) -> str:
     return "real"
 
 
+def detect_repro_status(output: str, exit_code: int) -> str:
+    out_l = output.lower()
+
+    if (
+        "error: addresssanitizer:" in out_l
+        or "runtime error:" in out_l
+        or "error: libfuzzer:" in out_l
+        or "summary: addresssanitizer:" in out_l
+        or "summary: libfuzzer:" in out_l
+    ):
+        return "crashed"
+
+    if "did not crash" in out_l:
+        return "not-crashed"
+
+    if "timeout" in out_l:
+        return "timeout"
+
+    if exit_code != 0:
+        return "nonzero-exit"
+
+    return "not-crashed"
+
+
 def triage_run(
     target: str, run_dir: Path, fuzzer_path: Path, timeout_sec: int
 ) -> dict[str, Any]:
@@ -276,6 +503,8 @@ def triage_run(
     minimized_index = load_minimized_index(target)
     crash_origin = detect_crash_origin(meta)
 
+    diagnostics_meta = meta.get("diagnostics", {}) if isinstance(meta, dict) else {}
+
     report_dir = Path("/workspace/artifacts/reports") / target / run_dir.name
     ensure_dir(report_dir)
 
@@ -284,6 +513,7 @@ def triage_run(
     by_type: dict[str, list[str]] = {}
     by_function: dict[str, list[str]] = {}
     by_location: dict[str, list[str]] = {}
+    by_repro_status: dict[str, list[str]] = {}
 
     for crash in crash_files:
         log_path = report_dir / f"{crash.name}.repro.log"
@@ -297,10 +527,19 @@ def triage_run(
         sig = signature_from_stack(stack)
         sig_hash = sha256_hex(sig)
 
-        crash_type = detect_crash_type(out)
-        crash_function, crash_file_path, crash_line = extract_root_cause(out, stack)
+        raw_crash_type = detect_raw_crash_type(out)
+        normalized_crash_type = normalize_crash_type(raw_crash_type, out, exit_code)
+        repro_status = detect_repro_status(out, exit_code)
 
-        bucket_type = crash_type or "unknown"
+        (
+            crash_function,
+            crash_file_path,
+            crash_line,
+            root_cause_score,
+            root_cause_reason,
+        ) = extract_root_cause(out, stack, target)
+
+        bucket_type = normalized_crash_type or "unknown"
         bucket_function = crash_function or "unknown"
         bucket_location = make_location_bucket(crash_file_path, crash_line)
 
@@ -310,14 +549,18 @@ def triage_run(
             crash_file=crash.name,
             crash_path=str(crash),
             exit_code=exit_code,
+            repro_status=repro_status,
             signature=sig,
             signature_hash=sig_hash,
             stacktrace=stack,
             log_path=str(log_path),
-            crash_type=crash_type,
+            raw_crash_type=raw_crash_type,
+            normalized_crash_type=normalized_crash_type,
             crash_function=crash_function,
             crash_file_path=crash_file_path,
             crash_line=crash_line,
+            root_cause_score=root_cause_score,
+            root_cause_reason=root_cause_reason,
             bucket_type=bucket_type,
             bucket_function=bucket_function,
             bucket_location=bucket_location,
@@ -334,6 +577,7 @@ def triage_run(
         by_type.setdefault(bucket_type, []).append(crash.name)
         by_function.setdefault(bucket_function, []).append(crash.name)
         by_location.setdefault(bucket_location, []).append(crash.name)
+        by_repro_status.setdefault(repro_status, []).append(crash.name)
 
     unique = len(signatures)
     total = len(results)
@@ -348,12 +592,14 @@ def triage_run(
         "target_ref": target_ref,
         "crash_origin": crash_origin,
         "repro_env": repro_env,
+        "diagnostics": diagnostics_meta,
         "counts": {
             "total_crashes": total,
             "unique_signatures": unique,
             "unique_crash_types": len(by_type),
             "unique_functions": len(by_function),
             "unique_locations": len(by_location),
+            "unique_repro_statuses": len(by_repro_status),
         },
         "signatures": [
             {
@@ -379,17 +625,27 @@ def triage_run(
                     by_location.items(), key=lambda x: (-len(x[1]), x[0])
                 )
             ],
+            "by_repro_status": [
+                {"repro_status": k, "crashes": v}
+                for k, v in sorted(
+                    by_repro_status.items(), key=lambda x: (-len(x[1]), x[0])
+                )
+            ],
         },
         "crashes": [
             {
                 "crash_file": r.crash_file,
                 "crash_path": r.crash_path,
                 "exit_code": r.exit_code,
+                "repro_status": r.repro_status,
                 "signature_hash": r.signature_hash,
-                "crash_type": r.crash_type,
+                "raw_crash_type": r.raw_crash_type,
+                "normalized_crash_type": r.normalized_crash_type,
                 "crash_function": r.crash_function,
                 "crash_file_path": r.crash_file_path,
                 "crash_line": r.crash_line,
+                "root_cause_score": r.root_cause_score,
+                "root_cause_reason": r.root_cause_reason,
                 "bucket_type": r.bucket_type,
                 "bucket_function": r.bucket_function,
                 "bucket_location": r.bucket_location,
@@ -411,7 +667,7 @@ def triage_run(
     )
 
     lines: list[str] = []
-    lines.append(f"# Fuzz Triage Report — {target}")
+    lines.append(f"# Fuzz Triage Report - {target}")
     lines.append("")
     lines.append(f"- **Run ID:** `{run_dir.name}`")
     lines.append(f"- **Run dir:** `{run_dir}`")
@@ -423,7 +679,25 @@ def triage_run(
     lines.append(f"- **Unique crash types:** **{len(by_type)}**")
     lines.append(f"- **Unique functions:** **{len(by_function)}**")
     lines.append(f"- **Unique locations:** **{len(by_location)}**")
+    lines.append(f"- **Unique repro statuses:** **{len(by_repro_status)}**")
     lines.append("")
+
+    if diagnostics_meta:
+        lines.append("## Diagnostic configuration")
+        lines.append("")
+        lines.append(
+            f"- **Sanitizers:** `{diagnostics_meta.get('sanitizers', 'unknown')}`"
+        )
+        lines.append(
+            f"- **ASAN symbolizer:** `{diagnostics_meta.get('asan_symbolizer_path', '')}`"
+        )
+        lines.append(
+            f"- **ASAN options:** `{diagnostics_meta.get('asan_options', '')}`"
+        )
+        lines.append(
+            f"- **UBSAN options:** `{diagnostics_meta.get('ubsan_options', '')}`"
+        )
+        lines.append("")
 
     if meta:
         lines.append("## Meta")
@@ -477,18 +751,33 @@ def triage_run(
             lines.append(f"- `{n}`")
         lines.append("")
 
+    lines.append("## Buckets by repro status")
+    lines.append("")
+    for entry in report_json["buckets"]["by_repro_status"]:
+        lines.append(
+            f"### `{entry['repro_status']}` — {len(entry['crashes'])} crash(es)"
+        )
+        lines.append("")
+        for n in entry["crashes"]:
+            lines.append(f"- `{n}`")
+        lines.append("")
+
     lines.append("## Crash details")
     lines.append("")
     for r in results:
         lines.append(f"### `{r.crash_file}`")
         lines.append("")
         lines.append(f"- **Exit code:** `{r.exit_code}`")
+        lines.append(f"- **Repro status:** `{r.repro_status}`")
         lines.append(f"- **Crash origin:** `{r.crash_origin}`")
         lines.append(f"- **Signature:** `{r.signature_hash}`")
-        lines.append(f"- **Crash type:** `{r.crash_type}`")
+        lines.append(f"- **Raw crash type:** `{r.raw_crash_type}`")
+        lines.append(f"- **Normalized crash type:** `{r.normalized_crash_type}`")
         lines.append(f"- **Function:** `{r.crash_function}`")
         lines.append(f"- **File:** `{r.crash_file_path}`")
         lines.append(f"- **Line:** `{r.crash_line}`")
+        lines.append(f"- **Root cause score:** `{r.root_cause_score}`")
+        lines.append(f"- **Root cause reason:** `{'; '.join(r.root_cause_reason)}`")
         if r.minimized_path:
             lines.append(f"- **Minimized path:** `{r.minimized_path}`")
             lines.append(f"- **Original size:** `{r.original_size}`")
@@ -499,7 +788,7 @@ def triage_run(
         lines.append("")
         if r.stacktrace:
             lines.append("```")
-            lines.extend(r.stacktrace[:30])
+            lines.extend(r.stacktrace[:12])
             lines.append("```")
         else:
             lines.append("_No stacktrace extracted._")
@@ -518,6 +807,7 @@ def triage_run(
         "unique_crash_types": len(by_type),
         "unique_functions": len(by_function),
         "unique_locations": len(by_location),
+        "unique_repro_statuses": len(by_repro_status),
     }
 
 
@@ -527,8 +817,16 @@ def main() -> None:
     )
     ap.add_argument("--target", default="cjson", help="Target name (default: cjson)")
     ap.add_argument(
-        "--run", required=True, help="Run directory (repo-relative or absolute)"
+    "--run",
+    help="Run directory (repo-relative or absolute)",
     )
+
+    ap.add_argument(
+        "--last",
+        action="store_true",
+        help="Use the latest run directory automatically",
+    )
+    
     ap.add_argument(
         "--timeout", type=int, default=20, help="Timeout seconds per crash repro"
     )
@@ -536,10 +834,14 @@ def main() -> None:
 
     target = args.target
 
-    run_arg = args.run
-    run_dir = Path(run_arg)
-    if not run_dir.is_absolute():
-        run_dir = Path("/workspace") / run_arg
+    if args.last:
+        run_dir = get_last_run_dir(target)
+    elif args.run:
+        run_dir = Path(args.run)
+        if not run_dir.is_absolute():
+            run_dir = Path("/workspace") / run_dir
+    else:
+        raise SystemExit("Specify --run or --last") 
 
     if target == "cjson":
         fuzzer_path = Path("/workspace/targets/cjson/out/cjson_fuzzer")

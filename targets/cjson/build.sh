@@ -5,6 +5,10 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SRC="$ROOT/targets/cjson/src/cjson"
 OUT="$ROOT/targets/cjson/out"
 
+# Load shared diagnostics config
+source "$ROOT/scripts/diagnostics_env.sh"
+fuzzpipe_setup_diagnostics_env
+
 mkdir -p "$OUT"
 
 CJSON_OBJ="$OUT/cJSON.o"
@@ -19,12 +23,17 @@ COMMON_FLAGS=(
 )
 
 SAN_FLAGS=(
-  -fsanitize=address,undefined
+  "-fsanitize=${FUZZPIPE_SANITIZERS}"
 )
 
 FUZZ_COV_FLAGS=(
   -fsanitize=fuzzer-no-link
 )
+
+echo "[+] Build root: $ROOT"
+echo "[+] Source dir: $SRC"
+echo "[+] Output dir: $OUT"
+echo "[+] Sanitizers: $FUZZPIPE_SANITIZERS"
 
 echo "[+] Compiling cJSON.c as C"
 clang \
