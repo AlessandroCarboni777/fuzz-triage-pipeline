@@ -47,8 +47,14 @@ param(
 
 $image = "fuzzpipe"
 
+$script:SupportedTargets = @("cjson", "cjson_old", "yaml", "sqlite")
+
 function Get-SupportedTargets {
-    return @("cjson", "cjson_old", "yaml", "sqlite")
+    return $script:SupportedTargets
+}
+
+function Get-SupportedTargetsDisplay {
+    return (Get-SupportedTargets) -join ", "
 }
 
 function Assert-TargetSupported {
@@ -59,7 +65,7 @@ function Assert-TargetSupported {
 
     $supported = Get-SupportedTargets
     if ($supported -notcontains $TargetName) {
-        throw "Unsupported target: $TargetName. Supported targets: $($supported -join ', ')"
+        throw "Unsupported target: $TargetName. Supported targets: $(Get-SupportedTargetsDisplay)"
     }
 }
 
@@ -69,8 +75,7 @@ function Resolve-RequiredTarget {
     )
 
     if ([string]::IsNullOrWhiteSpace($TargetName)) {
-        $supported = Get-SupportedTargets
-        throw "Target required for command '$cmd'. Supported targets: $($supported -join ', ')"
+        throw "Target required for command '$cmd'. Supported targets: $(Get-SupportedTargetsDisplay)"
     }
 
     Assert-TargetSupported -TargetName $TargetName
@@ -117,7 +122,7 @@ function Show-Usage {
     Write-Host "  .\fuzz\run.ps1 shell"
     Write-Host "  .\fuzz\run.ps1 help"
     Write-Host "  .\fuzz\run.ps1 summary"
-    Write-Host "  supported targets: cjson, cjson_old, yaml, sqlite"
+    Write-Host "  supported targets: $(Get-SupportedTargetsDisplay)"
     Write-Host ""
     Write-Host "Target-based commands always require an explicit target."
     Write-Host ""
