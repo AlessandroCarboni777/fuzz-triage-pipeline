@@ -14,6 +14,36 @@ It supports automated target fetch/build, libFuzzer execution, crash capture, re
 
 ---
 
+## TL-DR
+
+A reproducible fuzzing and crash-triage framework that:
+
+- runs libFuzzer targets in isolated Docker environments
+- captures, reproduces and minimizes crashes deterministically
+- performs automated crash triage and stacktrace bucketing
+- extracts root cause information from sanitizer output
+- generates structured Markdown/JSON reports
+- supports multi-target and multi-version validation
+
+Designed to simulate a realistic vulnerability discovery workflow.
+
+---
+
+## What makes this non-trivial
+
+Unlike simple fuzzing harnesses, this project focuses on the full vulnerability lifecycle:
+
+- deterministic crash reproduction across runs
+- automated input minimization preserving crash behavior
+- stacktrace-based crash deduplication
+- root cause extraction from sanitizer diagnostics
+- structured triage output suitable for analysis or automation
+- version-aware testing for comparing target behavior
+
+The pipeline is built as a reusable framework, not a single-target setup.
+
+---
+
 ## Why this project
 
 This project was built to demonstrate a complete fuzzing workflow rather than a single harness or isolated proof of concept.
@@ -100,7 +130,25 @@ Markdown / JSON reports
 Optional coverage artifact generation
 ```
 
-# Repository layout
+---
+
+## Design decisions
+
+- Docker-based isolation ensures reproducibility across environments
+- libFuzzer chosen for deterministic in-process fuzzing and sanitizer integration
+- stacktrace bucketing used instead of raw crash hashing for better deduplication
+- triage is separated from fuzzing to allow independent analysis workflows
+- coverage is optional to keep the core pipeline lightweight
+
+## Trade-offs
+
+- optimized for clarity and reproducibility rather than maximum fuzzing performance
+- limited to libFuzzer backend (no AFL++ abstraction yet)
+- root cause extraction is heuristic-based and may require manual validation
+
+---
+
+## Repository layout
 ```
 docker/                  Docker environment
 fuzz/                    runner and fuzzing scripts
@@ -114,6 +162,21 @@ artifacts/minimized/     minimized crash artifacts
 artifacts/reports/       Markdown/JSON reports
 artifacts/coverage/      optional coverage artifacts
 ```
+
+---
+
+## Example workflow
+
+A typical run looks like:
+
+1. fuzz target `cjson` for N seconds
+2. detect crash and save artifact
+3. reproduce crash deterministically
+4. minimize crashing input
+5. extract root cause from ASan output
+6. generate structured report
+
+This mirrors a real vulnerability discovery workflow from fuzzing to triage.
 
 ---
 
@@ -187,6 +250,28 @@ $env:FUZZPIPE_ENABLE_COVERAGE = "1"
 .\fuzz\run.ps1 coverage-replay-log cjson -Last
 Remove-Item Env:FUZZPIPE_ENABLE_COVERAGE
 ```
+
+---
+
+## Case study: cJSON v1.5.0 vulnerability analysis
+
+This case demonstrates the full pipeline on a legacy vulnerable version.
+
+Steps performed:
+
+- fuzzing executed on `cjson v1.5.0`
+- crash detected and persisted
+- crash reproduced deterministically
+- input minimized to smallest triggering payload
+- root cause extracted from ASan output
+
+Outcome:
+
+- vulnerability type: heap-buffer-overflow
+- affected function: `parse_string`
+- minimized input size: 1 byte
+
+This validates the pipeline's ability to move from fuzzing to actionable vulnerability insight.
 
 ---
 
