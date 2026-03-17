@@ -2,7 +2,7 @@
 set -euo pipefail
 
 fuzzpipe_list_supported_targets() {
-  echo "cjson cjson_old yaml sqlite"
+  echo "cjson yaml sqlite"
 }
 
 fuzzpipe_assert_target_supported() {
@@ -22,7 +22,7 @@ fuzzpipe_target_family() {
   local target="$1"
 
   case "$target" in
-    cjson|cjson_old)
+    cjson)
       echo "cjson"
       ;;
     yaml)
@@ -41,7 +41,7 @@ fuzzpipe_target_repo_subdir() {
   local target="$1"
 
   case "$target" in
-    cjson|cjson_old)
+    cjson)
       echo "cjson"
       ;;
     yaml)
@@ -60,7 +60,7 @@ fuzzpipe_target_source_kind() {
   local target="$1"
 
   case "$target" in
-    cjson|cjson_old|yaml)
+    cjson|yaml)
       echo "git"
       ;;
     sqlite)
@@ -78,9 +78,6 @@ fuzzpipe_target_default_ref() {
   case "$target" in
     cjson)
       echo "master"
-      ;;
-    cjson_old)
-      echo "v1.5.0"
       ;;
     yaml)
       echo "master"
@@ -124,6 +121,19 @@ fuzzpipe_target_fuzzer_path() {
   local root="$1"
   local target="$2"
   echo "$(fuzzpipe_target_out_dir "$root" "$target")/${target}_fuzzer"
+}
+
+fuzzpipe_target_coverage_root() {
+  local root="$1"
+  local target="$2"
+  echo "$root/artifacts/coverage/$target"
+}
+
+fuzzpipe_target_coverage_dir() {
+  local root="$1"
+  local target="$2"
+  local run_id="$3"
+  echo "$(fuzzpipe_target_coverage_root "$root" "$target")/$run_id"
 }
 
 fuzzpipe_target_demo_seed() {

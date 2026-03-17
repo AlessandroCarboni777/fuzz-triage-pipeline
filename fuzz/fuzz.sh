@@ -20,8 +20,13 @@ CRASH_DIR="$RUN_DIR/crashes"
 CORPUS_DIR="$RUN_DIR/corpus"
 LOG_FILE="$RUN_DIR/run.log"
 META_FILE="$RUN_DIR/meta.json"
+COVERAGE_DIR="$(fuzzpipe_target_coverage_dir "$ROOT" "$TARGET" "$RUN_ID")"
 
 mkdir -p "$CRASH_DIR" "$CORPUS_DIR"
+
+if [[ "${FUZZPIPE_ENABLE_COVERAGE:-0}" == "1" ]]; then
+  mkdir -p "$COVERAGE_DIR"
+fi
 
 # Common fuzzing knobs (can be overridden via env)
 MAX_TOTAL_TIME="${MAX_TOTAL_TIME:-0}"   # 0 = run until Ctrl+C
@@ -30,15 +35,27 @@ TIMEOUT="${TIMEOUT:-2}"
 
 write_meta() {
   local target_version="$1"
+  local effective_target_ref
+  local target_family
+  local target_source_kind
+
+  effective_target_ref="${TARGET_REF:-$(fuzzpipe_target_default_ref "$TARGET")}"
+  target_family="$(fuzzpipe_target_family "$TARGET")"
+  target_source_kind="$(fuzzpipe_target_source_kind "$TARGET")"
+
   cat > "$META_FILE" <<EOF
 {
   "target": "$TARGET",
+  "target_family": "$target_family",
+  "target_source_kind": "$target_source_kind",
+  "coverage_enabled": $(if [[ "${FUZZPIPE_ENABLE_COVERAGE:-0}" == "1" ]]; then echo true; else echo false; fi),
+  "coverage_dir": "$COVERAGE_DIR",
   "mode": "$MODE",
   "run_id": "$RUN_ID",
   "timestamp": "$(date -Iseconds)",
   "docker_image": "${DOCKER_IMAGE_TAG:-unknown}",
   "target_version": "$target_version",
-  "target_ref": "${TARGET_REF:-master}",
+  "target_ref": "$effective_target_ref",
   "fuzzer": "libFuzzer",
   "diagnostics": {
     "sanitizers": "${FUZZPIPE_SANITIZERS}",
@@ -53,6 +70,79 @@ write_meta() {
   }
 }
 EOF
+}
+
+generate_coverage_artifacts() {
+  if [[ "${FUZZPIPE_ENABLE_COVERAGE:-0}" != "1" ]]; then
+    return 0
+  fi
+
+  if [[ "$MODE" == "demo-crash" ]]; then
+    echo "[+] Coverage skipped for demo-crash mode" | tee -a "$LOG_FILE"
+    return 0
+  fi
+
+  if ! command -v llvm-profdata >/dev/null 2>&1; then
+    echo "[-] llvm-profdata not found, skipping coverage generation" | tee -a "$LOG_FILE"
+    return 0
+  fi
+
+  if ! command -v llvm-cov >/dev/null 2>&1; then
+    echo "[-] llvm-cov not found, skipping coverage generation" | tee -a "$LOG_FILE"
+    return 0
+  fi
+
+  if [ ! -x "$FUZZER" ]; then
+    echo "[-] Coverage skipped: fuzzer binary not found: $FUZZER" | tee -a "$LOG_FILE"
+    return 0
+  fi
+
+  if [ ! -d "$CORPUS_DIR" ]; then
+    echo "[-] Coverage skipped: corpus dir not found: $CORPUS_DIR" | tee -a "$LOG_FILE"
+    return 0
+  fi
+
+  mapfile -t corpus_files < <(find "$CORPUS_DIR" -maxdepth 1 -type f | sort)
+
+  if [ "${#corpus_files[@]}" -eq 0 ]; then
+    echo "[+] Coverage skipped: no corpus inputs available" | tee -a "$LOG_FILE"
+    return 0
+  fi
+
+  local profraw="$COVERAGE_DIR/coverage.profraw"
+  local profdata="$COVERAGE_DIR/coverage.profdata"
+  local summary_txt="$COVERAGE_DIR/coverage-summary.txt"
+  local replay_log="$COVERAGE_DIR/coverage-replay.log"
+  local html_dir="$COVERAGE_DIR/html"
+
+  rm -f "$profraw" "$profdata" "$summary_txt"
+  rm -rf "$html_dir"
+  mkdir -p "$html_dir"
+
+  echo "[+] Generating coverage artifacts" | tee -a "$LOG_FILE"
+  echo "[+] Coverage dir: $COVERAGE_DIR" | tee -a "$LOG_FILE"
+
+  export LLVM_PROFILE_FILE="$profraw"
+  export FUZZPIPE_DEMO_CRASH=0
+
+  set +e
+  "$FUZZER" "${corpus_files[@]}" >"$replay_log" 2>&1
+  local replay_exit=$?
+  set -e
+
+  echo "[+] Coverage replay exit code: $replay_exit" | tee -a "$LOG_FILE"
+
+  if [ ! -f "$profraw" ]; then
+    echo "[-] Coverage skipped: raw profile not generated" | tee -a "$LOG_FILE"
+    return 0
+  fi
+
+  llvm-profdata merge -sparse "$profraw" -o "$profdata"
+  llvm-cov report "$FUZZER" -instr-profile="$profdata" > "$summary_txt"
+  llvm-cov show "$FUZZER" -instr-profile="$profdata" -format=html -output-dir="$html_dir" >/dev/null
+
+  echo "[+] Coverage summary: $summary_txt" | tee -a "$LOG_FILE"
+  echo "[+] Coverage HTML dir: $html_dir" | tee -a "$LOG_FILE"
 }
 
 echo "[+] Run dir: $RUN_DIR" | tee -a "$LOG_FILE"
@@ -124,4 +214,13 @@ if [ "$MAX_TOTAL_TIME" != "0" ]; then
   FUZZ_ARGS+=("-max_total_time=$MAX_TOTAL_TIME")
 fi
 
+set +e
 "$FUZZER" "${FUZZ_ARGS[@]}" "$CORPUS_DIR" 2>&1 | tee -a "$LOG_FILE"
+fuzzer_exit_code=${PIPESTATUS[0]}
+set -e
+
+echo "[+] Fuzzer exit code: $fuzzer_exit_code" | tee -a "$LOG_FILE"
+
+generate_coverage_artifacts
+
+exit "$fuzzer_exit_code"

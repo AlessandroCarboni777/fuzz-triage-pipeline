@@ -47,7 +47,7 @@ param(
 
 $image = "fuzzpipe"
 
-$script:SupportedTargets = @("cjson", "cjson_old", "yaml", "sqlite")
+$script:SupportedTargets = @("cjson", "yaml", "sqlite")
 
 function Get-SupportedTargets {
     return $script:SupportedTargets
@@ -128,10 +128,12 @@ function Show-Usage {
     Write-Host ""
     Write-Host "  .\fuzz\run.ps1 fuzz <target> [seconds] [-targetRef <ref>]"
     Write-Host "      example: .\fuzz\run.ps1 fuzz cjson 30 -targetRef v1.7.17"
+    Write-Host "      example: .\fuzz\run.ps1 fuzz cjson 30 -targetRef v1.5.0"
     Write-Host "      example: .\fuzz\run.ps1 fuzz sqlite 30 -targetRef 3.51.3"
     Write-Host ""
     Write-Host "  .\fuzz\run.ps1 demo-crash <target> [seconds] [-targetRef <ref>]"
     Write-Host "      example: .\fuzz\run.ps1 demo-crash cjson 5 -targetRef v1.7.17"
+    Write-Host "      example: .\fuzz\run.ps1 demo-crash cjson 5 -targetRef v1.5.0"
     Write-Host "      example: .\fuzz\run.ps1 demo-crash yaml 5"
     Write-Host ""
     Write-Host "  .\fuzz\run.ps1 repro <target> -crash <path>"
@@ -170,7 +172,7 @@ function Show-Usage {
     Write-Host "  .\fuzz\run.ps1 delete <target> -All"
     Write-Host ""
     Write-Host "Optional environment variables passed through to the container if set:"
-    Write-Host "  FUZZPIPE_SANITIZERS, ASAN_OPTIONS, UBSAN_OPTIONS, ASAN_SYMBOLIZER_PATH"
+    Write-Host "  FUZZPIPE_SANITIZERS, ASAN_OPTIONS, UBSAN_OPTIONS, ASAN_SYMBOLIZER_PATH, FUZZPIPE_ENABLE_COVERAGE"
     Show-CommandSummary
 }
 
@@ -323,6 +325,9 @@ function Get-CommonDockerArgs {
     }
     if (-not [string]::IsNullOrWhiteSpace($env:ASAN_OPTIONS)) {
         $args += @("-e", "ASAN_OPTIONS=$($env:ASAN_OPTIONS)")
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:FUZZPIPE_ENABLE_COVERAGE)) {
+        $args += @("-e", "FUZZPIPE_ENABLE_COVERAGE=$($env:FUZZPIPE_ENABLE_COVERAGE)")
     }
     if (-not [string]::IsNullOrWhiteSpace($env:UBSAN_OPTIONS)) {
         $args += @("-e", "UBSAN_OPTIONS=$($env:UBSAN_OPTIONS)")

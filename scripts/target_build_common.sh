@@ -1,6 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+fuzzpipe_coverage_enabled() {
+  local value="${FUZZPIPE_ENABLE_COVERAGE:-0}"
+  [[ "$value" == "1" || "$value" == "true" || "$value" == "TRUE" ]]
+}
+
+fuzzpipe_append_coverage_flags() {
+  local -n flags_ref=$1
+
+  if fuzzpipe_coverage_enabled; then
+    flags_ref+=(
+      -fprofile-instr-generate
+      -fcoverage-mapping
+    )
+  fi
+}
+
 fuzzpipe_build_cjson_target() {
   local root="$1"
   local target="$2"
@@ -33,10 +49,17 @@ fuzzpipe_build_cjson_target() {
     -fsanitize=fuzzer-no-link
   )
 
+  local coverage_flags=()
+  fuzzpipe_append_coverage_flags coverage_flags
+
+  local coverage_flags=()
+  fuzzpipe_append_coverage_flags coverage_flags
+
   echo "[+] Build root: $root"
   echo "[+] Source dir: $src"
   echo "[+] Output dir: $out"
   echo "[+] Sanitizers: $FUZZPIPE_SANITIZERS"
+  echo "[+] Coverage enabled: $(if fuzzpipe_coverage_enabled; then echo yes; else echo no; fi)"
 
   echo "[+] Compiling cJSON.c as C"
   clang \
@@ -44,6 +67,7 @@ fuzzpipe_build_cjson_target() {
     "${common_flags[@]}" \
     "${san_flags[@]}" \
     "${fuzz_cov_flags[@]}" \
+    "${coverage_flags[@]}" \
     -c "$src/cJSON.c" \
     -o "$cjson_obj"
 
@@ -53,6 +77,7 @@ fuzzpipe_build_cjson_target() {
     "${common_flags[@]}" \
     "${san_flags[@]}" \
     "${fuzz_cov_flags[@]}" \
+    "${coverage_flags[@]}" \
     -c "$root/targets/$target/harness.cpp" \
     -o "$harness_obj"
 
@@ -60,6 +85,7 @@ fuzzpipe_build_cjson_target() {
   clang++ \
     "${common_flags[@]}" \
     "${san_flags[@]}" \
+    "${coverage_flags[@]}" \
     -fsanitize=fuzzer \
     "$harness_obj" \
     "$cjson_obj" \
@@ -122,6 +148,9 @@ EOF
     -fsanitize=fuzzer-no-link
   )
 
+  local coverage_flags=()
+  fuzzpipe_append_coverage_flags coverage_flags
+
   local yaml_defines=(
     -DHAVE_CONFIG_H
   )
@@ -133,6 +162,7 @@ EOF
   echo "[+] Generated dir: $generated"
   echo "[+] Output dir: $out"
   echo "[+] Sanitizers: $FUZZPIPE_SANITIZERS"
+  echo "[+] Coverage enabled: $(if fuzzpipe_coverage_enabled; then echo yes; else echo no; fi)"
 
   for file in api reader scanner parser loader writer emitter dumper; do
     echo "[+] Compiling ${file}.c"
@@ -144,6 +174,7 @@ EOF
       "${common_flags[@]}" \
       "${san_flags[@]}" \
       "${fuzz_cov_flags[@]}" \
+      "${coverage_flags[@]}" \
       -c "$src/${file}.c" \
       -o "$out/${file}.o"
   done
@@ -157,6 +188,7 @@ EOF
     "${common_flags[@]}" \
     "${san_flags[@]}" \
     "${fuzz_cov_flags[@]}" \
+    "${coverage_flags[@]}" \
     -c "$root/targets/$target/harness.cpp" \
     -o "$harness_obj"
 
@@ -222,6 +254,7 @@ fuzzpipe_build_sqlite_target() {
   echo "[+] Source dir: $src"
   echo "[+] Output dir: $out"
   echo "[+] Sanitizers: $FUZZPIPE_SANITIZERS"
+  echo "[+] Coverage enabled: $(if fuzzpipe_coverage_enabled; then echo yes; else echo no; fi)"
 
   echo "[+] Compiling sqlite3.c"
   clang \
@@ -230,6 +263,7 @@ fuzzpipe_build_sqlite_target() {
     "${common_flags[@]}" \
     "${san_flags[@]}" \
     "${fuzz_cov_flags[@]}" \
+    "${coverage_flags[@]}" \
     -c "$src/sqlite3.c" \
     -o "$sqlite_obj"
 
@@ -240,6 +274,7 @@ fuzzpipe_build_sqlite_target() {
     "${common_flags[@]}" \
     "${san_flags[@]}" \
     "${fuzz_cov_flags[@]}" \
+    "${coverage_flags[@]}" \
     -c "$root/targets/$target/harness.cpp" \
     -o "$harness_obj"
 
